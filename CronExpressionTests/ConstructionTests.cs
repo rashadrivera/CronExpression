@@ -75,18 +75,5 @@ namespace CronExpressionTests {
 		[TestProperty("Type", "Positive")]
 		public void ValidMinuteExpressionsConstructionTest(string value)
 			=> new CronExpression(value);
-
-		[DataTestMethod]
-		[DataRow(10)]
-		[TestProperty("Type", "Positive")]
-		public void ValidMinuteNextConstructionTest(int value) {
-
-			var expression = new CronExpression($"{value} * * * *");
-
-			var now = DateTimeOffset.Now;
-			var expected = now + TimeSpan.FromMinutes(value);
-			var nextInterval = expression.Next(now);
-			Assert.AreEqual(expected, nextInterval);
-		}
 	}
 }

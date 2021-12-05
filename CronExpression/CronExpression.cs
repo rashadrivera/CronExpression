@@ -62,11 +62,9 @@ namespace System {
 		public DateTimeOffset NextInterval(DateTimeOffset target, int offset)
 			=> throw new NotImplementedException();
 
-		//public TimeSpan Offset(DateTimeOffset target) {
-
-		//	var returnValue = this._Minutes.Apply(target);
-		//	return returnValue;
-		//}
+		public TimeSpan Offset() {
+#error Left Off here
+		}
 
 		//public TimeSpan OffsetInterval(int offset)
 		//	=> throw new NotImplementedException();
@@ -299,6 +297,7 @@ namespace System {
 				if (!this.IsRelative)
 					throw new InvalidOperationException();
 
+#error Left Off here
 				throw new NotImplementedException();
 			}
 
