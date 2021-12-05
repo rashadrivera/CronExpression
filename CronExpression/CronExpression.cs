@@ -1,5 +1,6 @@
 ﻿using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
 using System.Text.RegularExpressions;
 
 namespace System {
@@ -8,15 +9,15 @@ namespace System {
 
 	public sealed class CronExpression {
 
-		private readonly MinuteParser[] _Minutes;
+		private readonly MinuteParser _Minutes;
 
-		private readonly HoursParser[] _Hours;
+		//private readonly HoursParser[] _Hours;
 
-		private readonly DaysParser[] _Days;
+		//private readonly DaysParser[] _Days;
 
-		private readonly MonthParser[] _Month;
+		//private readonly MonthParser[] _Month;
 
-		private readonly DayOfWeekParser[] _DayOfWeek;
+		//private readonly DayOfWeekParser[] _DayOfWeek;
 
 		public CronExpression(string expression) {
 
@@ -52,62 +53,67 @@ namespace System {
 				TimeSpan.FromSeconds(0.2)
 			);
 
-		public DateTimeOffset Next()
+		public DateTimeOffset Next(DateTimeOffset target) {
+
+			var returnValue = this._Minutes.Apply(target);
+			return returnValue;
+		}
+
+		public DateTimeOffset NextInterval(DateTimeOffset target, int offset)
 			=> throw new NotImplementedException();
 
-		public DateTimeOffset NextInterval(int offset)
-			=> throw new NotImplementedException();
+		//public TimeSpan Offset(DateTimeOffset target) {
 
-		public TimeSpan Offset()
-			=> throw new NotImplementedException();
+		//	var returnValue = this._Minutes.Apply(target);
+		//	return returnValue;
+		//}
 
-		public TimeSpan OffsetInterval(int offset)
-			=> throw new NotImplementedException();
+		//public TimeSpan OffsetInterval(int offset)
+		//	=> throw new NotImplementedException();
 
 		#region Member Class(es)
 
 		sealed class MinuteParser {
 
-			readonly IBaseValue _Value;
+			readonly ICronValue[] _Values;
 
-			public MinuteParser(string minutePart) {
+			public MinuteParser(params string[] minutePartCollection) {
+				if (minutePartCollection == null)
+					throw new ArgumentNullException(nameof(minutePartCollection));
 
-				if (string.IsNullOrEmpty(minutePart))
-					throw new ArgumentNullException(nameof(minutePart));
+				var values = new List<ICronValue>(16);
+				foreach (var i in minutePartCollection)
+					values.Add(this._ExtractValue(i));
 
-				var rangeRegex = Regex.Match(minutePart, @"^(?<Min>\d+)-(?<Max>\d+)$");
-				var stepsRegex = Regex.Match(minutePart, @"^(?<Start>\d+)/(?<Step>\d+)$");
-				if (minutePart == "*")
-					this._Value = new AnyValue();
-				else if (rangeRegex.Success) {
-					var min = int.Parse(rangeRegex.Result("${Min}"));
-					var max = int.Parse(rangeRegex.Result("${Max}"));
-					this._ValidateValue(min);
-					this._ValidateValue(max);
-					this._Value = new RangeValue(min, max);
-				} else if (stepsRegex.Success) {
-					var start = int.Parse(rangeRegex.Result("${Start}"));
-					var step = int.Parse(rangeRegex.Result("${Step}"));
-					this._ValidateValue(start);
-					this._ValidateValue(step);
-					this._Value = new StepValue(this._ExpandSteps(start, step));
-				} else if (int.TryParse(minutePart, out var specificValue)) {
-					this._ValidateValue(specificValue);
-					this._Value = new SpecificValue(minutePart);
-				} else
-					throw new FormatException($"'{minutePart}' is invalid");
+				this._Values = values.ToArray();
 			}
 
-			public static MinuteParser[] Parse(string minuteParts) {
+			public static MinuteParser Parse(string minuteParts) {
 
 				var match = Regex.Match(minuteParts, @"(?<value>[-\*0-9\/]+)(?:,(?<value>[-\*0-9\/]+))*");
 				if (!match.Success)
 					throw new FormatException($"'{minuteParts}' is invalid");
 
-				var returnValue = new List<MinuteParser>();
-				foreach (var item in minuteParts.Split(','))
-					returnValue.Add(new MinuteParser(item));
-				return returnValue.ToArray();
+				var q = from i in minuteParts.Split(',')
+						select i;
+
+				return new MinuteParser(q.ToArray());
+			}
+
+			public DateTimeOffset Apply(DateTimeOffset target) {
+
+				var results = new List<TimeSpan>(16);
+
+				foreach (var i in this._Values) {
+					foreach (var v in i.Values().Cast<int>()) {
+						results.Add(TimeSpan.FromMinutes(v));
+					}
+				}
+
+				var closestInterval = results.Min();
+				var returnValue = target + closestInterval;
+
+				return returnValue;
 			}
 
 			#region Helper Method(s)
@@ -122,6 +128,38 @@ namespace System {
 					next += step;
 				} while (next < 59);
 				return returnValue.ToArray();
+			}
+
+			ICronValue _ExtractValue(string minutePart) {
+
+				if (string.IsNullOrEmpty(minutePart))
+					throw new ArgumentNullException(nameof(minutePart));
+
+				ICronValue returnValue;
+
+				var rangeRegex = Regex.Match(minutePart, @"^(?<Min>\d+)-(?<Max>\d+)$");
+				var stepsRegex = Regex.Match(minutePart, @"^(?<Start>\d+)/(?<Step>\d+)$");
+				if (minutePart == "*")
+					returnValue = new AnyValue();
+				else if (rangeRegex.Success) {
+					var min = int.Parse(rangeRegex.Result("${Min}"));
+					var max = int.Parse(rangeRegex.Result("${Max}"));
+					this._ValidateValue(min);
+					this._ValidateValue(max);
+					returnValue = new RangeValue(min, max);
+				} else if (stepsRegex.Success) {
+					var start = int.Parse(stepsRegex.Result("${Start}"));
+					var step = int.Parse(stepsRegex.Result("${Step}"));
+					this._ValidateValue(start);
+					this._ValidateValue(step);
+					returnValue = new StepValue(this._ExpandSteps(start, step));
+				} else if (int.TryParse(minutePart, out var specificValue)) {
+					this._ValidateValue(specificValue);
+					returnValue = new SpecificValue(specificValue);
+				} else
+					throw new FormatException($"'{minutePart}' is invalid");
+
+				return returnValue;
 			}
 
 			void _ValidateValue(int value) {
@@ -212,18 +250,22 @@ namespace System {
 				=> false;
 		}
 
-		interface IBaseValue {
+		interface IRelativeCronValue {
 
-			object[] Values();
+			bool IsRelative { get; }
+
+			TimeSpan Offset();
 		}
 
-		sealed class AnyValue : IBaseValue {
+		interface ICronValue { object[] Values(); }
+
+		sealed class AnyValue : ICronValue {
 
 			public object[] Values()
 				=> null;
 		}
 
-		sealed class RangeValue : IBaseValue {
+		sealed class RangeValue : ICronValue {
 
 			readonly object _Min;
 
@@ -238,18 +280,33 @@ namespace System {
 				=> new object[] { this._Min, this._Max };
 		}
 
-		sealed class SpecificValue : IBaseValue {
+		sealed class SpecificValue : ICronValue, IRelativeCronValue {
 
 			readonly object _Value;
 
 			public SpecificValue(object value)
-				=> this._Value = value;
+				: this(value, false) { }
+
+			public SpecificValue(object value, bool isRelative) {
+				this._Value = value;
+				this.IsRelative = isRelative;
+			}
+
+			public bool IsRelative { get; }
+
+			public TimeSpan Offset() {
+
+				if (!this.IsRelative)
+					throw new InvalidOperationException();
+
+				throw new NotImplementedException();
+			}
 
 			public object[] Values()
 				=> new object[] { this._Value };
 		}
 
-		sealed class StepValue : IBaseValue {
+		sealed class StepValue : ICronValue {
 
 			readonly object[] _AllSteps;
 
