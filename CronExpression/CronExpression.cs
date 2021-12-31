@@ -62,6 +62,8 @@ namespace System {
 			var returnValue = this._Minutes
 				.Apply(targetMinusSecondsDown);
 
+			if (returnValue == targetMinusSecondsDown)
+				return returnValue.AddMinutes(1);
 			return returnValue;
 		}
 
@@ -123,7 +125,7 @@ namespace System {
 				var rangeRegex = Regex.Match(minutePart, @"^(?<Min>\d+)-(?<Max>\d+)$");
 				var stepsRegex = Regex.Match(minutePart, @"^(?<Start>\d+)/(?<Step>\d+)$");
 				if (minutePart == "*")
-					returnValue = new NextMinuteValue();
+					returnValue = new NoOp();
 				else if (rangeRegex.Success) {
 					var min = int.Parse(rangeRegex.Result("${Min}"));
 					var max = int.Parse(rangeRegex.Result("${Max}"));
@@ -178,7 +180,7 @@ namespace System {
 						return target + TimeSpan.FromMinutes((60 - target.Minute) + this._Min);
 					if (target.Minute < this._Min)
 						return target + TimeSpan.FromMinutes(this._Min - target.Minute);
-					return target.AddMinutes(1); // We are within range
+					return target; // We are within range
 				}
 			}
 
@@ -205,12 +207,12 @@ namespace System {
 				}
 			}
 
-			sealed class NextMinuteValue : ICronValue {
+			sealed class NoOp : ICronValue {
 
-				public NextMinuteValue() { }
+				public NoOp() { }
 
 				public DateTimeOffset Values(DateTimeOffset target)
-					=> target.AddMinutes(1);
+					=> target;
 			}
 
 			sealed class StepValue : ICronValue {
