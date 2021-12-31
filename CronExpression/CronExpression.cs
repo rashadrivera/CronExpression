@@ -67,6 +67,11 @@ namespace System {
 
 		#region Member Class(es)
 
+		interface ICronValue {
+
+			DateTimeOffset Values(DateTimeOffset target);
+		}
+
 		sealed class MinuteParser {
 
 			readonly ICronValue[] _Values;
@@ -146,174 +151,186 @@ namespace System {
 			}
 
 			#endregion
-		}
 
-		sealed class HoursParser {
+			#region Member Class(es)
 
-			readonly string _MinutePart;
+			sealed class RangeValue : ICronValue {
 
-			public HoursParser(string minutePart) {
+				readonly int _Min;
 
-				if (string.IsNullOrEmpty(minutePart))
-					throw new ArgumentNullException(nameof(minutePart));
-				if (!Validate(minutePart))
-					throw new ArgumentException("Value is not valid", nameof(minutePart));
-				this._MinutePart = minutePart;
-				this.IsValid = false;
+				readonly int _Max;
+
+				public RangeValue(int min, int max) {
+
+					if (min < 0 || min > 59)
+						throw new ArgumentOutOfRangeException(nameof(min));
+					if (max < 0 || max > 59)
+						throw new ArgumentOutOfRangeException(nameof(max));
+					if (min > max)
+						throw new ArgumentOutOfRangeException(nameof(min), $"Value cannot be greater than max value of {max}");
+					this._Min = min;
+					this._Max = max;
+				}
+
+				public DateTimeOffset Values(DateTimeOffset target) {
+
+					if (target.Minute > this._Max)
+						return target + TimeSpan.FromMinutes((60 - target.Minute) + this._Min);
+					if (target.Minute < this._Min)
+						return target + TimeSpan.FromMinutes(this._Min - target.Minute);
+					return target.AddMinutes(1); // We are within range
+				}
 			}
 
-			public bool IsValid { get; }
+			sealed class SpecificValue : ICronValue {
 
-			public static bool Validate(string expression)
-				=> false;
-		}
+				readonly int _Value;
 
-		sealed class DaysParser {
+				public SpecificValue(int value)
+					: this(value, false) { }
 
-			readonly string _MinutePart;
+				public SpecificValue(int value, bool isRelative) {
+					this._Value = value;
+					this.IsRelative = isRelative;
+				}
 
-			public DaysParser(string minutePart) {
+				public bool IsRelative { get; }
 
-				if (string.IsNullOrEmpty(minutePart))
-					throw new ArgumentNullException(nameof(minutePart));
-				if (!Validate(minutePart))
-					throw new ArgumentException("Value is not valid", nameof(minutePart));
-				this._MinutePart = minutePart;
-				this.IsValid = false;
+				public DateTimeOffset Values(DateTimeOffset target) {
+
+					if (target.Minute >= this._Value)
+						return target + TimeSpan.FromMinutes((60 - target.Minute) + this._Value);
+					else
+						return target + TimeSpan.FromMinutes(this._Value - target.Minute);
+				}
 			}
 
-			public bool IsValid { get; }
+			sealed class NextMinuteValue : ICronValue {
 
-			public static bool Validate(string expression)
-				=> false;
-		}
+				public NextMinuteValue() { }
 
-		sealed class MonthParser {
-
-			readonly string _MinutePart;
-
-			public MonthParser(string minutePart) {
-
-				if (string.IsNullOrEmpty(minutePart))
-					throw new ArgumentNullException(nameof(minutePart));
-				if (!Validate(minutePart))
-					throw new ArgumentException("Value is not valid", nameof(minutePart));
-				this._MinutePart = minutePart;
-				this.IsValid = false;
+				public DateTimeOffset Values(DateTimeOffset target)
+					=> target.AddMinutes(1);
 			}
 
-			public bool IsValid { get; }
+			sealed class StepValue : ICronValue {
 
-			public static bool Validate(string expression)
-				=> false;
-		}
+				readonly int _Start;
 
-		sealed class DayOfWeekParser {
+				readonly int _Step;
 
-			readonly string _MinutePart;
+				public StepValue(int start, int step) {
 
-			public DayOfWeekParser(string minutePart) {
+					if (start < 0)
+						throw new ArgumentOutOfRangeException(nameof(start));
 
-				if (string.IsNullOrEmpty(minutePart))
-					throw new ArgumentNullException(nameof(minutePart));
-				if (!Validate(minutePart))
-					throw new ArgumentException("Value is not valid", nameof(minutePart));
-				this._MinutePart = minutePart;
-				this.IsValid = false;
+					this._Start = start;
+					this._Step = step;
+				}
+
+				public DateTimeOffset Values(DateTimeOffset target) {
+
+					if (target.Minute < this._Start)
+						return target.AddMinutes(this._Start - target.Minute);
+
+					var q = from i in this._GenerateAllSteps()
+							where i > target.Minute
+							select i;
+
+					var interval = q.First();
+					return target
+						.AddMinutes(-target.Minute)
+						.AddMinutes(interval);
+				}
+
+				IEnumerable<int> _GenerateAllSteps() {
+					for (var i = this._Start + this._Step; i < 60; i += this._Step)
+						yield return i;
+				}
 			}
 
-			public bool IsValid { get; }
-
-			public static bool Validate(string expression)
-				=> false;
+			#endregion
 		}
 
-		interface ICronValue {
+		//sealed class HoursParser {
 
-			DateTimeOffset Values(DateTimeOffset target);
-		}
+		//	readonly string _MinutePart;
 
-		sealed class RangeValue : ICronValue {
+		//	public HoursParser(string minutePart) {
 
-			readonly int _Min;
+		//		if (string.IsNullOrEmpty(minutePart))
+		//			throw new ArgumentNullException(nameof(minutePart));
+		//		if (!Validate(minutePart))
+		//			throw new ArgumentException("Value is not valid", nameof(minutePart));
+		//		this._MinutePart = minutePart;
+		//		this.IsValid = false;
+		//	}
 
-			readonly int _Max;
+		//	public bool IsValid { get; }
 
-			public RangeValue(int min, int max) {
+		//	public static bool Validate(string expression)
+		//		=> false;
+		//}
 
-				if (min < 0 || min > 59)
-					throw new ArgumentOutOfRangeException(nameof(min));
-				if (max < 0 || max > 59)
-					throw new ArgumentOutOfRangeException(nameof(max));
-				if (min > max)
-					throw new ArgumentOutOfRangeException(nameof(min), $"Value cannot be greater than max value of {max}");
-				this._Min = min;
-				this._Max = max;
-			}
+		//sealed class DaysParser {
 
-			public DateTimeOffset Values(DateTimeOffset target) {
+		//	readonly string _MinutePart;
 
-				if (target.Minute > this._Max)
-					return target + TimeSpan.FromMinutes((60 - target.Minute) + this._Min);
-				if (target.Minute < this._Min)
-					return target + TimeSpan.FromMinutes(this._Min - target.Minute);
-				return target.AddMinutes(1); // We are within range
-			}
-		}
+		//	public DaysParser(string minutePart) {
 
-		sealed class SpecificValue : ICronValue {
+		//		if (string.IsNullOrEmpty(minutePart))
+		//			throw new ArgumentNullException(nameof(minutePart));
+		//		if (!Validate(minutePart))
+		//			throw new ArgumentException("Value is not valid", nameof(minutePart));
+		//		this._MinutePart = minutePart;
+		//		this.IsValid = false;
+		//	}
 
-			readonly int _Value;
+		//	public bool IsValid { get; }
 
-			public SpecificValue(int value)
-				: this(value, false) { }
+		//	public static bool Validate(string expression)
+		//		=> false;
+		//}
 
-			public SpecificValue(int value, bool isRelative) {
-				this._Value = value;
-				this.IsRelative = isRelative;
-			}
+		//sealed class MonthParser {
 
-			public bool IsRelative { get; }
+		//	readonly string _MinutePart;
 
-			public DateTimeOffset Values(DateTimeOffset target) {
+		//	public MonthParser(string minutePart) {
 
-				if (target.Minute > this._Value)
-					return target + TimeSpan.FromMinutes((60 - target.Minute) + this._Value);
-				if (target.Minute < this._Value)
-					return target + TimeSpan.FromMinutes(this._Value - target.Minute);
-				return target;
-			}
-		}
+		//		if (string.IsNullOrEmpty(minutePart))
+		//			throw new ArgumentNullException(nameof(minutePart));
+		//		if (!Validate(minutePart))
+		//			throw new ArgumentException("Value is not valid", nameof(minutePart));
+		//		this._MinutePart = minutePart;
+		//		this.IsValid = false;
+		//	}
 
-		sealed class NextMinuteValue : ICronValue {
+		//	public bool IsValid { get; }
 
-			public NextMinuteValue() { }
+		//	public static bool Validate(string expression)
+		//		=> false;
+		//}
 
-			public DateTimeOffset Values(DateTimeOffset target)
-				=> target.AddMinutes(1);
-		}
+		//sealed class DayOfWeekParser {
 
-		sealed class StepValue : ICronValue {
+		//	readonly string _MinutePart;
 
-			readonly int _Start;
+		//	public DayOfWeekParser(string minutePart) {
 
-			readonly int _Step;
+		//		if (string.IsNullOrEmpty(minutePart))
+		//			throw new ArgumentNullException(nameof(minutePart));
+		//		if (!Validate(minutePart))
+		//			throw new ArgumentException("Value is not valid", nameof(minutePart));
+		//		this._MinutePart = minutePart;
+		//		this.IsValid = false;
+		//	}
 
-			public StepValue(int start, int step) {
+		//	public bool IsValid { get; }
 
-				if (start < 0)
-					throw new ArgumentOutOfRangeException(nameof(start));
-
-				this._Start = start;
-				this._Step = step;
-			}
-
-			public DateTimeOffset Values(DateTimeOffset target) {
-
-				var returnValue = target;
-				throw new NotImplementedException();
-			}
-		}
+		//	public static bool Validate(string expression)
+		//		=> false;
+		//}
 
 		#endregion
 	}

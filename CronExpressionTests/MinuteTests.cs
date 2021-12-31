@@ -56,15 +56,34 @@ namespace CronExpressionTests {
 		[DataTestMethod]
 		[DataRow(0, 10, "12/30/2021 10:13:12", "12/30/2021 10:20")]
 		[DataRow(0, 3, "12/30/2021 10:13:12", "12/30/2021 10:15")]
-		[DataRow(13, 5, "12/30/2021 10:13:12", "12/30/2021 10:13")]
+		[DataRow(13, 5, "12/30/2021 10:13:12", "12/30/2021 10:18")]
 		[DataRow(13, 5, "12/30/2021 10:10:12", "12/30/2021 10:13")]
-		[DataRow(13, 5, "12/30/2021 10:14:12", "12/30/2021 10:15")]
+		[DataRow(13, 5, "12/30/2021 10:17:12", "12/30/2021 10:18")]
+		[DataRow(13, 5, "12/30/2021 10:18:12", "12/30/2021 10:23")]
 		[TestProperty("Type", "Positive")]
 		public void ValidMinuteStepTest(int start, int step, string targetAsString, string expectedAsString) {
 
 			var target = DateTimeOffset.Parse(targetAsString);
 			var expected = DateTimeOffset.Parse(expectedAsString);
 			var expression = new CronExpression($"{start}/{step} * * * *");
+			var nextInterval = expression.Next(target);
+			Assert.AreEqual(expected, nextInterval);
+		}
+
+		[DataTestMethod]
+		[DataRow("5,13,35/3", "12/26/2021 03:43:12", "12/26/2021 03:44")]
+		[DataRow("5,13,35/3", "12/26/2021 03:05:12", "12/26/2021 03:13")]
+		[DataRow("5,13,35/3", "12/26/2021 03:05:12", "12/26/2021 03:13")]
+		[DataRow("5,13,35/3", "12/26/2021 03:13:13", "12/26/2021 03:35")]
+		[DataRow("5,13,35/3", "12/26/2021 03:34:34", "12/26/2021 03:35")]
+		[DataRow("5,13,35/3", "12/26/2021 03:35:35", "12/26/2021 03:38")]
+		[TestProperty("Type", "Positive")]
+		public void ValidMinuteSplitsTest(string splits, string targetAsString, string expectedAsString) {
+
+			var target = DateTimeOffset.Parse(targetAsString);
+			var expected = DateTimeOffset.Parse(expectedAsString);
+			var expression = new CronExpression($"{splits} * * * *");
+
 			var nextInterval = expression.Next(target);
 			Assert.AreEqual(expected, nextInterval);
 		}
