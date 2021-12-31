@@ -55,19 +55,15 @@ namespace System {
 
 		public DateTimeOffset Next(DateTimeOffset target) {
 
-			var returnValue = this._Minutes.Apply(target);
+			var targetMinusSecondsDown = target
+				.AddSeconds(-target.Second)
+				.AddMilliseconds(-target.Millisecond);
+
+			var returnValue = this._Minutes
+				.Apply(targetMinusSecondsDown);
+
 			return returnValue;
 		}
-
-		public DateTimeOffset NextInterval(DateTimeOffset target, int offset)
-			=> throw new NotImplementedException();
-
-		public TimeSpan Offset() {
-#error Left Off here
-		}
-
-		//public TimeSpan OffsetInterval(int offset)
-		//	=> throw new NotImplementedException();
 
 		#region Member Class(es)
 
@@ -76,6 +72,7 @@ namespace System {
 			readonly ICronValue[] _Values;
 
 			public MinuteParser(params string[] minutePartCollection) {
+
 				if (minutePartCollection == null)
 					throw new ArgumentNullException(nameof(minutePartCollection));
 
@@ -100,33 +97,16 @@ namespace System {
 
 			public DateTimeOffset Apply(DateTimeOffset target) {
 
-				var results = new List<TimeSpan>(16);
+				var results = new List<DateTimeOffset>(16);
 
-				foreach (var i in this._Values) {
-					foreach (var v in i.Values().Cast<int>()) {
-						results.Add(TimeSpan.FromMinutes(v));
-					}
-				}
+				foreach (var i in this._Values)
+					results.Add(i.Values(target));
 
-				var closestInterval = results.Min();
-				var returnValue = target + closestInterval;
-
+				var returnValue = results.Min();
 				return returnValue;
 			}
 
 			#region Helper Method(s)
-
-			object[] _ExpandSteps(int start, int step) {
-
-				var returnValue = new List<object>();
-				returnValue.Add(start);
-				var next = start;
-				do {
-					returnValue.Add(next);
-					next += step;
-				} while (next < 59);
-				return returnValue.ToArray();
-			}
 
 			ICronValue _ExtractValue(string minutePart) {
 
@@ -138,7 +118,7 @@ namespace System {
 				var rangeRegex = Regex.Match(minutePart, @"^(?<Min>\d+)-(?<Max>\d+)$");
 				var stepsRegex = Regex.Match(minutePart, @"^(?<Start>\d+)/(?<Step>\d+)$");
 				if (minutePart == "*")
-					returnValue = new AnyValue();
+					returnValue = new NextMinuteValue();
 				else if (rangeRegex.Success) {
 					var min = int.Parse(rangeRegex.Result("${Min}"));
 					var max = int.Parse(rangeRegex.Result("${Max}"));
@@ -150,7 +130,7 @@ namespace System {
 					var step = int.Parse(stepsRegex.Result("${Step}"));
 					this._ValidateValue(start);
 					this._ValidateValue(step);
-					returnValue = new StepValue(this._ExpandSteps(start, step));
+					returnValue = new StepValue(start, step);
 				} else if (int.TryParse(minutePart, out var specificValue)) {
 					this._ValidateValue(specificValue);
 					returnValue = new SpecificValue(specificValue);
@@ -248,72 +228,91 @@ namespace System {
 				=> false;
 		}
 
-		interface IRelativeCronValue {
+		interface ICronValue {
 
-			bool IsRelative { get; }
-
-			TimeSpan Offset();
-		}
-
-		interface ICronValue { object[] Values(); }
-
-		sealed class AnyValue : ICronValue {
-
-			public object[] Values()
-				=> null;
+			DateTimeOffset Values(DateTimeOffset target);
 		}
 
 		sealed class RangeValue : ICronValue {
 
-			readonly object _Min;
+			readonly int _Min;
 
-			readonly object _Max;
+			readonly int _Max;
 
-			public RangeValue(object min, object max) {
-				this._Min = min ?? throw new ArgumentNullException(nameof(min));
-				this._Max = max ?? throw new ArgumentNullException(nameof(max));
+			public RangeValue(int min, int max) {
+
+				if (min < 0 || min > 59)
+					throw new ArgumentOutOfRangeException(nameof(min));
+				if (max < 0 || max > 59)
+					throw new ArgumentOutOfRangeException(nameof(max));
+				if (min > max)
+					throw new ArgumentOutOfRangeException(nameof(min), $"Value cannot be greater than max value of {max}");
+				this._Min = min;
+				this._Max = max;
 			}
 
-			public object[] Values()
-				=> new object[] { this._Min, this._Max };
+			public DateTimeOffset Values(DateTimeOffset target) {
+
+				if (target.Minute > this._Max)
+					return target + TimeSpan.FromMinutes((60 - target.Minute) + this._Min);
+				if (target.Minute < this._Min)
+					return target + TimeSpan.FromMinutes(this._Min - target.Minute);
+				return target.AddMinutes(1); // We are within range
+			}
 		}
 
-		sealed class SpecificValue : ICronValue, IRelativeCronValue {
+		sealed class SpecificValue : ICronValue {
 
-			readonly object _Value;
+			readonly int _Value;
 
-			public SpecificValue(object value)
+			public SpecificValue(int value)
 				: this(value, false) { }
 
-			public SpecificValue(object value, bool isRelative) {
+			public SpecificValue(int value, bool isRelative) {
 				this._Value = value;
 				this.IsRelative = isRelative;
 			}
 
 			public bool IsRelative { get; }
 
-			public TimeSpan Offset() {
+			public DateTimeOffset Values(DateTimeOffset target) {
 
-				if (!this.IsRelative)
-					throw new InvalidOperationException();
-
-#error Left Off here
-				throw new NotImplementedException();
+				if (target.Minute > this._Value)
+					return target + TimeSpan.FromMinutes((60 - target.Minute) + this._Value);
+				if (target.Minute < this._Value)
+					return target + TimeSpan.FromMinutes(this._Value - target.Minute);
+				return target;
 			}
+		}
 
-			public object[] Values()
-				=> new object[] { this._Value };
+		sealed class NextMinuteValue : ICronValue {
+
+			public NextMinuteValue() { }
+
+			public DateTimeOffset Values(DateTimeOffset target)
+				=> target.AddMinutes(1);
 		}
 
 		sealed class StepValue : ICronValue {
 
-			readonly object[] _AllSteps;
+			readonly int _Start;
 
-			public StepValue(params object[] allSteps)
-				=> this._AllSteps = allSteps ?? throw new ArgumentNullException(nameof(allSteps));
+			readonly int _Step;
 
-			public object[] Values()
-				=> this._AllSteps;
+			public StepValue(int start, int step) {
+
+				if (start < 0)
+					throw new ArgumentOutOfRangeException(nameof(start));
+
+				this._Start = start;
+				this._Step = step;
+			}
+
+			public DateTimeOffset Values(DateTimeOffset target) {
+
+				var returnValue = target;
+				throw new NotImplementedException();
+			}
 		}
 
 		#endregion
