@@ -16,7 +16,7 @@ namespace CronExpressionTests {
 
 			var target = DateTimeOffset.Parse(targetAsString);
 			var expected = DateTimeOffset.Parse(expectedAsString);
-			var expression = new CronExpression($"{value} * * * *");
+			var expression = new System.CronExpression($"{value} * * * *");
 
 			var nextInterval = expression.Next(target);
 			Assert.AreEqual(expected, nextInterval);
@@ -26,7 +26,7 @@ namespace CronExpressionTests {
 		[TestProperty("Type", "Positive")]
 		public void ValidMinuteAsStarTest() {
 
-			var expression = new CronExpression($"* * * * *");
+			var expression = new System.CronExpression($"* * * * *");
 
 			var now = DateTimeOffset.Now;
 			var expected = now
@@ -48,7 +48,7 @@ namespace CronExpressionTests {
 
 			var target = DateTimeOffset.Parse(targetAsString);
 			var expected = DateTimeOffset.Parse(expectedAsString);
-			var expression = new CronExpression($"{start}-{end} * * * *");
+			var expression = new System.CronExpression($"{start}-{end} * * * *");
 			var nextInterval = expression.Next(target);
 			Assert.AreEqual(expected, nextInterval);
 		}
@@ -65,7 +65,7 @@ namespace CronExpressionTests {
 
 			var target = DateTimeOffset.Parse(targetAsString);
 			var expected = DateTimeOffset.Parse(expectedAsString);
-			var expression = new CronExpression($"{start}/{step} * * * *");
+			var expression = new System.CronExpression($"{start}/{step} * * * *");
 			var nextInterval = expression.Next(target);
 			Assert.AreEqual(expected, nextInterval);
 		}
@@ -82,7 +82,7 @@ namespace CronExpressionTests {
 
 			var target = DateTimeOffset.Parse(targetAsString);
 			var expected = DateTimeOffset.Parse(expectedAsString);
-			var expression = new CronExpression($"{splits} * * * *");
+			var expression = new System.CronExpression($"{splits} * * * *");
 
 			var nextInterval = expression.Next(target);
 			Assert.AreEqual(expected, nextInterval);
