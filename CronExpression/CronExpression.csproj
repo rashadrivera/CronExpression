@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <TargetFramework>net5.0</TargetFramework>
-    <AssemblyName>System.CronExpression</AssemblyName>
+    <AssemblyName>CronExpression.CronExpression</AssemblyName>
     <RootNamespace>System</RootNamespace>
   </PropertyGroup>
 

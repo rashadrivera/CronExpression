@@ -74,9 +74,9 @@ namespace CronExpressionTests {
 			=> new System.CronExpression(value);
 
 		[DataTestMethod]
-		//[DataRow("* 10 * * *")]
-		//[DataRow("* 10-15 * * *")]
-		//[DataRow("* 1/3 * * *")]
+		[DataRow("* 10 * * *")]
+		[DataRow("* 10-15 * * *")]
+		[DataRow("* 1/3 * * *")]
 		[DataRow("* 1/3,0,1-5 * * *")]
 		[TestProperty("Type", "Positive")]
 		public void ValidHourExpressionsConstructionTest(string value)

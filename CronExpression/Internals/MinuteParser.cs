@@ -5,7 +5,9 @@ using System.Text.RegularExpressions;
 
 namespace CronExpression.Internals {
 
-	sealed class MinuteParser {
+	sealed class MinuteParser : Parser {
+
+		const int MAX_VALUE = 60;
 
 		readonly ICronValue[] _Values;
 
@@ -41,21 +43,39 @@ namespace CronExpression.Internals {
 				results.Add(i.Values(target));
 
 			var returnValue = results.Min();
-			return returnValue;
+			// ONLY MINUTES REDUCE AT THE END TO REMOVE
+			// SECONDS AND MILLISECONDS
+			return _Reduce(returnValue);
 		}
 
 		#region Helper Method(s)
 
-		ICronValue _ExtractValue(string minutePart) {
+		static int _Value(DateTimeOffset target)
+			=> target.Minute;
 
-			if (string.IsNullOrEmpty(minutePart))
-				throw new ArgumentNullException(nameof(minutePart));
+		static DateTimeOffset _Adjust(DateTimeOffset target, int value)
+			=> target.AddMinutes(value);
+
+		static DateTimeOffset _Reduce(DateTimeOffset target)
+			=> target
+				.AddMilliseconds(-target.Millisecond)
+				.AddSeconds(-target.Second);
+
+		static DateTimeOffset _Fixed(DateTimeOffset target, int fixedValue)
+			=> _Reduce(target)
+			.AddMinutes(-target.Minute)
+			.AddMinutes(fixedValue);
+
+		ICronValue _ExtractValue(string part) {
+
+			if (string.IsNullOrEmpty(part))
+				throw new ArgumentNullException(nameof(part));
 
 			ICronValue returnValue;
 
-			var rangeRegex = Regex.Match(minutePart, @"^(?<Min>\d+)-(?<Max>\d+)$");
-			var stepsRegex = Regex.Match(minutePart, @"^(?<Start>\d+)/(?<Step>\d+)$");
-			if (minutePart == "*")
+			var rangeRegex = Regex.Match(part, @"^(?<Min>\d+)-(?<Max>\d+)$");
+			var stepsRegex = Regex.Match(part, @"^(?<Start>\d+)/(?<Step>\d+)$");
+			if (part == "*")
 				returnValue = new NoOp();
 			else if (rangeRegex.Success) {
 				var min = int.Parse(rangeRegex.Result("${Min}"));
@@ -69,17 +89,17 @@ namespace CronExpression.Internals {
 				this._ValidateValue(start);
 				this._ValidateValue(step);
 				returnValue = new StepValue(start, step);
-			} else if (int.TryParse(minutePart, out var specificValue)) {
+			} else if (int.TryParse(part, out var specificValue)) {
 				this._ValidateValue(specificValue);
 				returnValue = new SpecificValue(specificValue);
 			} else
-				throw new FormatException($"'{minutePart}' is invalid");
+				throw new FormatException($"'{part}' is invalid");
 
 			return returnValue;
 		}
 
 		void _ValidateValue(int value) {
-			if (value < 0 || value > 59)
+			if (value < 0 || value >= MAX_VALUE)
 				throw new FormatException($"Value '{value}' is out of range");
 		}
 
@@ -89,29 +109,34 @@ namespace CronExpression.Internals {
 
 		sealed class RangeValue : ICronValue {
 
-			readonly int _Min;
+			readonly int _MinValue;
 
-			readonly int _Max;
+			readonly int _MaxValue;
 
 			public RangeValue(int min, int max) {
 
-				if (min < 0 || min > 59)
+				if (min < 0 || min >= MAX_VALUE)
 					throw new ArgumentOutOfRangeException(nameof(min));
-				if (max < 0 || max > 59)
+				if (max < 0 || max >= MAX_VALUE)
 					throw new ArgumentOutOfRangeException(nameof(max));
 				if (min > max)
 					throw new ArgumentOutOfRangeException(nameof(min), $"Value cannot be greater than max value of {max}");
-				this._Min = min;
-				this._Max = max;
+				this._MinValue = min;
+				this._MaxValue = max;
 			}
 
 			public DateTimeOffset Values(DateTimeOffset target) {
 
-				if (target.Minute > this._Max)
-					return target + TimeSpan.FromMinutes((60 - target.Minute) + this._Min);
-				if (target.Minute < this._Min)
-					return target + TimeSpan.FromMinutes(this._Min - target.Minute);
-				return target; // We are within range
+				DateTimeOffset returnValue;
+				var targetValue = _Value(target);
+				var reduced = _Reduce(target);
+				if (reduced > _Fixed(target, this._MaxValue))
+					returnValue = _Reduce(_Adjust(target, (MAX_VALUE - targetValue) + this._MinValue));
+				else if (reduced < _Fixed(target, this._MinValue))
+					returnValue = _Reduce(_Adjust(target, this._MinValue - targetValue));
+				else
+					returnValue = target; // We are within range
+				return returnValue;
 			}
 		}
 
@@ -131,10 +156,15 @@ namespace CronExpression.Internals {
 
 			public DateTimeOffset Values(DateTimeOffset target) {
 
-				if (target.Minute >= this._Value)
-					return target + TimeSpan.FromMinutes((60 - target.Minute) + this._Value);
+				var returnValue = target;
+
+				var targetValue = _Value(target);
+				if (_Reduce(target) > _Fixed(target, this._Value))
+					returnValue = _Adjust(returnValue, (MAX_VALUE - targetValue) + this._Value);
 				else
-					return target + TimeSpan.FromMinutes(this._Value - target.Minute);
+					returnValue = _Adjust(returnValue, this._Value - targetValue);
+
+				return _Reduce(returnValue);
 			}
 		}
 
@@ -163,21 +193,33 @@ namespace CronExpression.Internals {
 
 			public DateTimeOffset Values(DateTimeOffset target) {
 
-				if (target.Minute < this._Start)
-					return target.AddMinutes(this._Start - target.Minute);
+				DateTimeOffset returnValue;
+				var targetValue = _Value(target);
+				var @fixed = _Fixed(target, this._Start);
+				var reduced = _Reduce(target);
+				if (reduced < @fixed)
+					returnValue = _Reduce(_Adjust(target, this._Start - targetValue));
+				else if (reduced == @fixed)
+					returnValue = target;
+				else {
 
-				var q = from i in this._GenerateAllSteps()
-						where i > target.Minute
-						select i;
+					var q = from i in this._GenerateAllSteps()
+							where i >= targetValue
+							select i;
 
-				var interval = q.First();
-				return target
-					.AddMinutes(-target.Minute)
-					.AddMinutes(interval);
+					if (!q.Any())
+						returnValue = _Reduce(_Adjust(target, (MAX_VALUE - targetValue) + this._Start));
+					else {
+						var interval = q.First();
+						returnValue = _Reduce(_Adjust(target, interval - targetValue));
+					}
+				}
+
+				return returnValue;
 			}
 
 			IEnumerable<int> _GenerateAllSteps() {
-				for (var i = this._Start + this._Step; i < 60; i += this._Step)
+				for (var i = this._Start + this._Step; i < MAX_VALUE; i += this._Step)
 					yield return i;
 			}
 		}

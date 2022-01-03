@@ -31,6 +31,46 @@ namespace System {
 			//this._DayOfWeek = DayOfWeekParser.Parse(matches.Result("${DayOfWeek}"));
 		}
 
+		public DateTimeOffset Next(DateTimeOffset target) {
+
+			var returnValue = target
+				// We check the next minute forward
+				.AddMinutes(1);
+			do {
+				returnValue = this._Next(returnValue);
+			} while (!this._IsDateValid(returnValue));
+
+			return returnValue;
+		}
+
+		#region Helper Method(s)
+
+		/// <summary>
+		/// Compute the next time based on Cron schedule
+		/// </summary>
+		/// <param name="target"></param>
+		/// <returns></returns>
+		DateTimeOffset _Next(DateTimeOffset target) {
+
+			var returnValue = this._Hour
+				.Apply(target);
+			returnValue = this._Minute
+				.Apply(returnValue);
+
+			return returnValue;
+		}
+
+		/// <summary>
+		/// The target is valid so long as it does not need adjustment per
+		/// the Cron schedule
+		/// </summary>
+		/// <param name="target"></param>
+		/// <returns></returns>
+		bool _IsDateValid(DateTimeOffset target) {
+			var peekNext = this._Next(target);
+			return peekNext == target;
+		}
+
 		static void _ValidateExpression(string expression) {
 
 			Debug.Assert(!string.IsNullOrWhiteSpace(nameof(expression)), "Invalid method call");
@@ -52,21 +92,7 @@ namespace System {
 				TimeSpan.FromSeconds(0.2)
 			);
 
-		public DateTimeOffset Next(DateTimeOffset target) {
-
-			var targetMinusSecondsDown = target
-				.AddSeconds(-target.Second)
-				.AddMilliseconds(-target.Millisecond);
-
-			var returnValue = this._Hour
-				.Apply(targetMinusSecondsDown);
-			returnValue = this._Minute
-				.Apply(returnValue);
-
-			if (returnValue == targetMinusSecondsDown)
-				return returnValue.AddMinutes(1);
-			return returnValue;
-		}
+		#endregion
 
 		#region Member Class(es)
 

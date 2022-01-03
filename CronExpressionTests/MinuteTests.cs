@@ -22,18 +22,14 @@ namespace CronExpressionTests {
 			Assert.AreEqual(expected, nextInterval);
 		}
 
-		[TestMethod]
-		[TestProperty("Type", "Positive")]
-		public void ValidMinuteAsStarTest() {
+		[DataTestMethod]
+		[DataRow("12/30/2021 10:55:12", "12/30/2021 10:56:00")]
+		public void ValidMinuteAsStarTest(string targetAsString, string expectedAsString) {
 
+			var target = DateTimeOffset.Parse(targetAsString);
+			var expected = DateTimeOffset.Parse(expectedAsString);
 			var expression = new System.CronExpression($"* * * * *");
-
-			var now = DateTimeOffset.Now;
-			var expected = now
-				.AddSeconds(-now.Second)
-				.AddMilliseconds(-now.Millisecond)
-				.AddMinutes(1);
-			var nextInterval = expression.Next(now);
+			var nextInterval = expression.Next(target);
 			Assert.AreEqual(expected, nextInterval);
 		}
 
@@ -41,7 +37,7 @@ namespace CronExpressionTests {
 		[DataRow(0, 10, "12/30/2021 10:55:12", "12/30/2021 11:00")]
 		[DataRow(0, 59, "12/30/2021 10:55:12", "12/30/2021 10:56")]
 		[DataRow(55, 56, "12/30/2021 10:55:12", "12/30/2021 10:56")]
-		[DataRow(55, 55, "12/30/2021 10:55:12", "12/30/2021 10:56")]
+		[DataRow(54, 55, "12/30/2021 10:55:12", "12/30/2021 11:54")]
 		[DataRow(56, 59, "12/30/2021 10:55:12", "12/30/2021 10:56")]
 		[TestProperty("Type", "Positive")]
 		public void ValidMinuteRangesTest(int start, int end, string targetAsString, string expectedAsString) {
@@ -71,7 +67,7 @@ namespace CronExpressionTests {
 		}
 
 		[DataTestMethod]
-		[DataRow("5,13,35/3", "12/26/2021 03:43:12", "12/26/2021 03:44")]
+		[DataRow("5,13,35/3", "12/26/2021 03:42:12", "12/26/2021 03:44")]
 		[DataRow("5,13,35/3", "12/26/2021 03:05:12", "12/26/2021 03:13")]
 		[DataRow("5,13,35/3", "12/26/2021 03:05:12", "12/26/2021 03:13")]
 		[DataRow("5,13,35/3", "12/26/2021 03:13:13", "12/26/2021 03:35")]
