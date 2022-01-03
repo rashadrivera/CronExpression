@@ -8,11 +8,13 @@ namespace System {
 
 	public sealed class CronExpression {
 
+		private readonly string _Expression;
+
 		private readonly MinuteParser _Minute;
 
 		private readonly HourParser _Hour;
 
-		//private readonly DaysParser _Day;
+		private readonly DayParser _Day;
 
 		//private readonly MonthParser _Month;
 
@@ -22,11 +24,13 @@ namespace System {
 
 			_ValidateExpression(expression);
 
+			this._Expression = expression;
+
 			var matches = _GetMatches(expression.Trim());
 
 			this._Minute = MinuteParser.Parse(matches.Result("${Minutes}"));
 			this._Hour = HourParser.Parse(matches.Result("${Hours}"));
-			//this._Day = DayParser.Parse(matches.Result("${Days}"));
+			this._Day = DayParser.Parse(matches.Result("${Days}"));
 			//this._Month = MonthParser.Parse(matches.Result("${Month}"));
 			//this._DayOfWeek = DayOfWeekParser.Parse(matches.Result("${DayOfWeek}"));
 		}
@@ -36,8 +40,12 @@ namespace System {
 			var returnValue = target
 				// We check the next minute forward
 				.AddMinutes(1);
+
+			var cycle = 0;
 			do {
 				returnValue = this._Next(returnValue);
+				if (++cycle > 30)
+					throw new RunawayCronExpressionException(this._Expression);
 			} while (!this._IsDateValid(returnValue));
 
 			return returnValue;
@@ -52,8 +60,10 @@ namespace System {
 		/// <returns></returns>
 		DateTimeOffset _Next(DateTimeOffset target) {
 
-			var returnValue = this._Hour
+			var returnValue = this._Day
 				.Apply(target);
+			returnValue = this._Hour
+				.Apply(returnValue);
 			returnValue = this._Minute
 				.Apply(returnValue);
 
@@ -91,90 +101,6 @@ namespace System {
 				RegexOptions.Singleline,
 				TimeSpan.FromSeconds(0.2)
 			);
-
-		#endregion
-
-		#region Member Class(es)
-
-		//sealed class HoursParser {
-
-		//	readonly string _MinutePart;
-
-		//	public HoursParser(string minutePart) {
-
-		//		if (string.IsNullOrEmpty(minutePart))
-		//			throw new ArgumentNullException(nameof(minutePart));
-		//		if (!Validate(minutePart))
-		//			throw new ArgumentException("Value is not valid", nameof(minutePart));
-		//		this._MinutePart = minutePart;
-		//		this.IsValid = false;
-		//	}
-
-		//	public bool IsValid { get; }
-
-		//	public static bool Validate(string expression)
-		//		=> false;
-		//}
-
-		//sealed class DaysParser {
-
-		//	readonly string _MinutePart;
-
-		//	public DaysParser(string minutePart) {
-
-		//		if (string.IsNullOrEmpty(minutePart))
-		//			throw new ArgumentNullException(nameof(minutePart));
-		//		if (!Validate(minutePart))
-		//			throw new ArgumentException("Value is not valid", nameof(minutePart));
-		//		this._MinutePart = minutePart;
-		//		this.IsValid = false;
-		//	}
-
-		//	public bool IsValid { get; }
-
-		//	public static bool Validate(string expression)
-		//		=> false;
-		//}
-
-		//sealed class MonthParser {
-
-		//	readonly string _MinutePart;
-
-		//	public MonthParser(string minutePart) {
-
-		//		if (string.IsNullOrEmpty(minutePart))
-		//			throw new ArgumentNullException(nameof(minutePart));
-		//		if (!Validate(minutePart))
-		//			throw new ArgumentException("Value is not valid", nameof(minutePart));
-		//		this._MinutePart = minutePart;
-		//		this.IsValid = false;
-		//	}
-
-		//	public bool IsValid { get; }
-
-		//	public static bool Validate(string expression)
-		//		=> false;
-		//}
-
-		//sealed class DayOfWeekParser {
-
-		//	readonly string _MinutePart;
-
-		//	public DayOfWeekParser(string minutePart) {
-
-		//		if (string.IsNullOrEmpty(minutePart))
-		//			throw new ArgumentNullException(nameof(minutePart));
-		//		if (!Validate(minutePart))
-		//			throw new ArgumentException("Value is not valid", nameof(minutePart));
-		//		this._MinutePart = minutePart;
-		//		this.IsValid = false;
-		//	}
-
-		//	public bool IsValid { get; }
-
-		//	public static bool Validate(string expression)
-		//		=> false;
-		//}
 
 		#endregion
 	}

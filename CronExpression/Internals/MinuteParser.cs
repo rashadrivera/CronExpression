@@ -119,7 +119,7 @@ namespace CronExpression.Internals {
 					throw new ArgumentOutOfRangeException(nameof(min));
 				if (max < 0 || max >= MAX_VALUE)
 					throw new ArgumentOutOfRangeException(nameof(max));
-				if (min > max)
+				if (min >= max)
 					throw new ArgumentOutOfRangeException(nameof(min), $"Value cannot be greater than max value of {max}");
 				this._MinValue = min;
 				this._MaxValue = max;
