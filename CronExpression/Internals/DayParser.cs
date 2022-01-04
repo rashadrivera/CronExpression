@@ -43,6 +43,8 @@ namespace CronExpression.Internals {
 				results.Add(i.Values(target));
 
 			var returnValue = results.Min();
+			if (target < returnValue)
+				returnValue = _Reduce(returnValue);
 			return returnValue;
 		}
 
@@ -202,11 +204,11 @@ namespace CronExpression.Internals {
 						.AddDays(_Max(reduced) - reduced.Day + 1);
 					while (_Max(seek) < this._Value)
 						seek = seek.AddMonths(1);
-					returnValue = _Adjust(seek, this._Value - _Value(seek));
+					returnValue = _Reduce(_Adjust(seek, this._Value - _Value(seek)));
 				} else
 					returnValue = _Adjust(returnValue, this._Value - targetValue);
 
-				return _Reduce(returnValue);
+				return returnValue;
 			}
 		}
 

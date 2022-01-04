@@ -16,7 +16,7 @@ namespace System {
 
 		private readonly DayParser _Day;
 
-		//private readonly MonthParser _Month;
+		private readonly MonthParser _Month;
 
 		//private readonly DayOfWeekParser _DayOfWeek;
 
@@ -31,7 +31,7 @@ namespace System {
 			this._Minute = MinuteParser.Parse(matches.Result("${Minutes}"));
 			this._Hour = HourParser.Parse(matches.Result("${Hours}"));
 			this._Day = DayParser.Parse(matches.Result("${Days}"));
-			//this._Month = MonthParser.Parse(matches.Result("${Month}"));
+			this._Month = MonthParser.Parse(matches.Result("${Month}"));
 			//this._DayOfWeek = DayOfWeekParser.Parse(matches.Result("${DayOfWeek}"));
 		}
 
@@ -60,8 +60,10 @@ namespace System {
 		/// <returns></returns>
 		DateTimeOffset _Next(DateTimeOffset target) {
 
-			var returnValue = this._Day
+			var returnValue = this._Month
 				.Apply(target);
+			returnValue = this._Day
+				.Apply(returnValue);
 			returnValue = this._Hour
 				.Apply(returnValue);
 			returnValue = this._Minute
@@ -78,7 +80,8 @@ namespace System {
 		/// <returns></returns>
 		bool _IsDateValid(DateTimeOffset target) {
 			var peekNext = this._Next(target);
-			return peekNext == target;
+			var returnValue = peekNext == target;
+			return returnValue;
 		}
 
 		static void _ValidateExpression(string expression) {

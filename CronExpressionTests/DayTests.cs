@@ -1,4 +1,3 @@
-
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using System;
 
@@ -61,22 +60,24 @@ namespace CronExpressionTests {
 			Assert.AreEqual(expected, nextInterval);
 		}
 
-		//[DataTestMethod]
-		//[DataRow("2,5,7/7", "12/26/2021 00:43:12", "12/26/2021 02:00")]
-		//[DataRow("2,5,7/7", "12/26/2021 03:05:12", "12/26/2021 05:00")]
-		//[DataRow("2,5,7/7", "12/26/2021 06:05:12", "12/26/2021 07:00")]
-		//[DataRow("2,5,7/7", "12/26/2021 08:13:13", "12/26/2021 14:00")]
-		//[DataRow("2,5,7/7", "12/26/2021 15:34:34", "12/26/2021 21:00")]
-		//[DataRow("2,5,7/7", "12/26/2021 22:35:35", "12/27/2021 02:00")]
-		//[TestProperty("Type", "Positive")]
-		//public void ValidDaySplitsTest(string splits, string targetAsString, string expectedAsString) {
+		[DataTestMethod]
+		// 1 - 5
+		[DataRow("2,5,7/7", "1/3/2022 00:43:12", "1/5/2022 00:00")]
+		[DataRow("2,5,7/7", "1/5/2022 23:59:12", "1/7/2022 00:00")]
+		[DataRow("2,5,7/7", "1/7/2022 23:59:12", "1/14/2022 00:00")]
+		[DataRow("2,5,7/7", "1/14/2022 23:59:12", "1/21/2022 00:00")]
+		[DataRow("2,5,7/7", "1/21/2022 23:59:12 -05:00", "1/28/2022 00:00 -05:00")]
+		// 6 - 10
+		[DataRow("2,5,7/7", "1/28/2022 23:59:12 -05:00", "2/2/2022 00:00 -05:00")]
+		[TestProperty("Type", "Positive")]
+		public void ValidDaySplitsTest(string splits, string targetAsString, string expectedAsString) {
 
-		//	var target = DateTimeOffset.Parse(targetAsString);
-		//	var expected = DateTimeOffset.Parse(expectedAsString);
-		//	var expression = new System.CronExpression($"* {splits} * * *");
+			var target = DateTimeOffset.Parse(targetAsString);
+			var expected = DateTimeOffset.Parse(expectedAsString);
+			var expression = new System.CronExpression($"* * {splits} * *");
 
-		//	var nextInterval = expression.Next(target);
-		//	Assert.AreEqual(expected, nextInterval);
-		//}
+			var nextInterval = expression.Next(target);
+			Assert.AreEqual(expected, nextInterval);
+		}
 	}
 }

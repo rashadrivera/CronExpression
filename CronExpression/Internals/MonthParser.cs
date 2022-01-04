@@ -5,13 +5,13 @@ using System.Text.RegularExpressions;
 
 namespace CronExpression.Internals {
 
-	sealed class MinuteParser : Parser {
+	sealed class MonthParser : Parser {
 
-		const int MAX_VALUE = 60;
+		const int MAX_VALUE = 12;
 
 		readonly ICronValue[] _Values;
 
-		public MinuteParser(params string[] partCollection) {
+		public MonthParser(params string[] partCollection) {
 
 			if (partCollection == null)
 				throw new ArgumentNullException(nameof(partCollection));
@@ -23,7 +23,7 @@ namespace CronExpression.Internals {
 			this._Values = values.ToArray();
 		}
 
-		public static MinuteParser Parse(string parts) {
+		public static MonthParser Parse(string parts) {
 
 			var match = Regex.Match(parts, @"(?<value>[-\*0-9\/]+)(?:,(?<value>[-\*0-9\/]+))*");
 			if (!match.Success)
@@ -32,7 +32,7 @@ namespace CronExpression.Internals {
 			var q = from i in parts.Split(',')
 					select i;
 
-			return new MinuteParser(q.ToArray());
+			return new MonthParser(q.ToArray());
 		}
 
 		public DateTimeOffset Apply(DateTimeOffset target) {
@@ -43,28 +43,31 @@ namespace CronExpression.Internals {
 				results.Add(i.Values(target));
 
 			var returnValue = results.Min();
-			// ONLY MINUTES REDUCE AT THE END TO REMOVE
-			// SECONDS AND MILLISECONDS
-			return _Reduce(returnValue);
+			if (target < returnValue)
+				returnValue = _Reduce(returnValue);
+			return returnValue;
 		}
 
 		#region Helper Method(s)
 
 		static int _Value(DateTimeOffset target)
-			=> target.Minute;
+			=> target.Month;
 
 		static DateTimeOffset _Adjust(DateTimeOffset target, int value)
-			=> target.AddMinutes(value);
+			=> target.AddMonths(value);
 
 		static DateTimeOffset _Reduce(DateTimeOffset target)
 			=> target
 				.AddMilliseconds(-target.Millisecond)
-				.AddSeconds(-target.Second);
+				.AddSeconds(-target.Second)
+				.AddMinutes(-target.Minute)
+				.AddMinutes(-target.Hour)
+				.AddDays(-(target.Day - 1));
 
 		static DateTimeOffset _Fixed(DateTimeOffset target, int fixedValue)
 			=> _Reduce(target)
-			.AddMinutes(-target.Minute)
-			.AddMinutes(fixedValue);
+			.AddMonths(-target.Month)
+			.AddMonths(fixedValue);
 
 		ICronValue _ExtractValue(string part) {
 

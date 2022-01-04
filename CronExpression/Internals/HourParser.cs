@@ -43,6 +43,8 @@ namespace CronExpression.Internals {
 				results.Add(i.Values(target));
 
 			var returnValue = results.Min();
+			if (target < returnValue)
+				returnValue = _Reduce(returnValue);
 			return returnValue;
 		}
 
@@ -159,11 +161,11 @@ namespace CronExpression.Internals {
 
 				var targetValue = _Value(target);
 				if (_Reduce(target) > _Fixed(target, this._Value))
-					returnValue = _Adjust(returnValue, (MAX_VALUE - targetValue) + this._Value);
+					returnValue = _Reduce(_Adjust(returnValue, (MAX_VALUE - targetValue) + this._Value));
 				else
 					returnValue = _Adjust(returnValue, this._Value - targetValue);
 
-				return _Reduce(returnValue);
+				return returnValue;
 			}
 		}
 
