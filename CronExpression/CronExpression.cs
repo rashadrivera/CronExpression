@@ -10,29 +10,11 @@ namespace System {
 
 		private readonly string _Expression;
 
-		private readonly MinuteParser _Minute;
-
-		private readonly HourParser _Hour;
-
-		private readonly DayParser _Day;
-
-		private readonly MonthParser _Month;
-
-		private readonly DayOfWeekParser _DayOfWeek;
-
 		public CronExpression(string expression) {
 
 			_ValidateExpression(expression);
 
-			this._Expression = expression;
-
-			var matches = _GetMatches(expression.Trim());
-
-			this._Minute = MinuteParser.Parse(matches.Result("${Minutes}"));
-			this._Hour = HourParser.Parse(matches.Result("${Hours}"));
-			this._Day = DayParser.Parse(matches.Result("${Days}"));
-			this._Month = MonthParser.Parse(matches.Result("${Month}"));
-			this._DayOfWeek = DayOfWeekParser.Parse(matches.Result("${DayOfWeek}"));
+			this._Expression = expression.Trim();
 		}
 
 		public DateTimeOffset Next(DateTimeOffset target) {
@@ -60,16 +42,20 @@ namespace System {
 		/// <returns></returns>
 		DateTimeOffset _Next(DateTimeOffset target) {
 
-			var returnValue = this._DayOfWeek
-				.Apply(target);
-			returnValue = this._Month
-				.Apply(returnValue);
-			returnValue = this._Day
-				.Apply(returnValue);
-			returnValue = this._Hour
-				.Apply(returnValue);
-			returnValue = this._Minute
-				.Apply(returnValue);
+			var matches = _GetMatches(this._Expression);
+
+			var _Minute = MinuteCronInterval.Parse(matches.Result("${Minutes}"));
+			var _Hour = HourCronInterval.Parse(matches.Result("${Hours}"));
+			var _Day = DayCronInterval.Parse(matches.Result("${Days}"));
+			var _Month = MonthCronInterval.Parse(matches.Result("${Month}"));
+			var _DayOfWeek = DayOfWeekCronInterval.Parse(matches.Result("${DayOfWeek}"));
+
+			var returnValue = target;
+			returnValue = _DayOfWeek.ApplyInterval(returnValue);
+			returnValue = _Month.ApplyInterval(returnValue);
+			returnValue = _Day.ApplyInterval(returnValue);
+			returnValue = _Hour.ApplyInterval(returnValue);
+			returnValue = _Minute.ApplyInterval(returnValue);
 
 			return returnValue;
 		}
@@ -97,6 +83,12 @@ namespace System {
 
 			if (!match.Success)
 				throw new ArgumentException("Value is not a valid CRON expression", nameof(expression));
+
+			MinuteCronInterval.Validate(match.Result("${Minutes}"));
+			HourCronInterval.Validate(match.Result("${Hours}"));
+			DayCronInterval.Validate(match.Result("${Days}"));
+			MonthCronInterval.Validate(match.Result("${Month}"));
+			DayOfWeekCronInterval.Validate(match.Result("${DayOfWeek}"));
 		}
 
 		static Match _GetMatches(string expression)

@@ -5,13 +5,13 @@ using System.Text.RegularExpressions;
 
 namespace CronExpression.Internals {
 
-	sealed class HourParser : Parser {
+	sealed class HourCronInterval : CronInterval {
 
 		const int MAX_VALUE = 24;
 
 		readonly ICronValue[] _Values;
 
-		public HourParser(params string[] partCollection) {
+		public HourCronInterval(params string[] partCollection) {
 
 			if (partCollection == null)
 				throw new ArgumentNullException(nameof(partCollection));
@@ -23,7 +23,21 @@ namespace CronExpression.Internals {
 			this._Values = values.ToArray();
 		}
 
-		public static HourParser Parse(string parts) {
+		public static HourCronInterval Parse(string parts) {
+
+			Validate(parts);
+
+			var match = Regex.Match(parts, @"(?<value>[-\*0-9\/]+)(?:,(?<value>[-\*0-9\/]+))*");
+			var q = from i in parts.Split(',')
+					select i;
+			return new HourCronInterval(q.ToArray());
+		}
+
+		/// <summary>
+		/// TODO:  Code Dept, we need to isolate individual value validators into shared code
+		/// </summary>
+		/// <param name="parts"></param>
+		public static void Validate(string parts) {
 
 			var match = Regex.Match(parts, @"(?<value>[-\*0-9\/]+)(?:,(?<value>[-\*0-9\/]+))*");
 			if (!match.Success)
@@ -32,10 +46,12 @@ namespace CronExpression.Internals {
 			var q = from i in parts.Split(',')
 					select i;
 
-			return new HourParser(q.ToArray());
+			// TODO: Code Dept, we need to isolate individual value validators into shared code
+			new HourCronInterval(q.ToArray())
+				.ApplyInterval(DateTimeOffset.Now);
 		}
 
-		public DateTimeOffset Apply(DateTimeOffset target) {
+		public override DateTimeOffset ApplyInterval(DateTimeOffset target) {
 
 			var results = new List<DateTimeOffset>(16);
 
@@ -67,42 +83,17 @@ namespace CronExpression.Internals {
 			.AddHours(-target.Hour)
 			.AddHours(fixedValue);
 
-		ICronValue _ExtractValue(string part) {
+		protected override bool ValidateValue(int value)
+			=> !(value < 0 || value >= MAX_VALUE);
 
-			if (string.IsNullOrEmpty(part))
-				throw new ArgumentNullException(nameof(part));
+		protected override ICronValue RangeValueFactory(int min, int max)
+			=> new RangeValue(min, max);
 
-			ICronValue returnValue;
+		protected override ICronValue StepFactory(int start, int step)
+			=> new StepValue(start, step);
 
-			var rangeRegex = Regex.Match(part, @"^(?<Min>\d+)-(?<Max>\d+)$");
-			var stepsRegex = Regex.Match(part, @"^(?<Start>\d+)/(?<Step>\d+)$");
-			if (part == "*")
-				returnValue = new NoOp();
-			else if (rangeRegex.Success) {
-				var min = int.Parse(rangeRegex.Result("${Min}"));
-				var max = int.Parse(rangeRegex.Result("${Max}"));
-				this._ValidateValue(min);
-				this._ValidateValue(max);
-				returnValue = new RangeValue(min, max);
-			} else if (stepsRegex.Success) {
-				var start = int.Parse(stepsRegex.Result("${Start}"));
-				var step = int.Parse(stepsRegex.Result("${Step}"));
-				this._ValidateValue(start);
-				this._ValidateValue(step);
-				returnValue = new StepValue(start, step);
-			} else if (int.TryParse(part, out var specificValue)) {
-				this._ValidateValue(specificValue);
-				returnValue = new SpecificValue(specificValue);
-			} else
-				throw new FormatException($"'{part}' is invalid");
-
-			return returnValue;
-		}
-
-		void _ValidateValue(int value) {
-			if (value < 0 || value >= MAX_VALUE)
-				throw new FormatException($"Value '{value}' is out of range");
-		}
+		protected override ICronValue SpecificIntervalFactory(int specificInterval)
+			=> new SpecificValue(specificInterval);
 
 		#endregion
 
@@ -167,14 +158,6 @@ namespace CronExpression.Internals {
 
 				return returnValue;
 			}
-		}
-
-		sealed class NoOp : ICronValue {
-
-			public NoOp() { }
-
-			public DateTimeOffset Values(DateTimeOffset target)
-				=> target;
 		}
 
 		sealed class StepValue : ICronValue {
