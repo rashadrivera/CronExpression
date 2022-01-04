@@ -6,11 +6,10 @@ namespace CronExpressionTests {
 	[TestClass]
 	public sealed class PracticalApplicationTests {
 
+		#region MinuteAndHour
+
 		const string MinuteAndHour_Cron = "3,15-20,35/5 10-15,20,22 * * *";
 
-		const string MinuteThroughMonth_Cron = "1 1 4/5 2,8 *";
-
-		#region MinuteAndHour
 		[DataTestMethod]
 		//// 1 - 5
 		[DataRow(MinuteAndHour_Cron, "12/26/2021 11:01:12", "12/26/2021 11:03:00")]
@@ -35,7 +34,12 @@ namespace CronExpressionTests {
 			var nextInterval = expression.Next(target);
 			Assert.AreEqual(expected, nextInterval);
 		}
+
 		#endregion
+
+		#region MinutesThroughMonth
+
+		const string MinuteThroughMonth_Cron = "1 1 4/5 2,8 *";
 
 		[DataTestMethod]
 		[DataRow(MinuteThroughMonth_Cron, "12/26/2021 11:01:12 -05:00", "2/4/2022 01:01:00 -05:00")]
@@ -44,6 +48,24 @@ namespace CronExpressionTests {
 		[DataRow(MinuteThroughMonth_Cron, "9/4/2022 01:01:00 -05:00", "2/4/2023 01:01:00")]
 		[TestProperty("Type", "Positive")]
 		public void MinutesThroughMonthTest(string value, string targetAsString, string expectedAsString) {
+
+			var target = DateTimeOffset.Parse(targetAsString);
+			var expected = DateTimeOffset.Parse(expectedAsString);
+			var expression = new System.CronExpression(value);
+
+			var nextInterval = expression.Next(target);
+			Assert.AreEqual(expected, nextInterval);
+		}
+
+		#endregion
+
+		const string AllParts_Cron = "1 2 3 4 6,2-3";// 6 = Sat, 2 = Tue, 3 = Wed
+
+		[DataTestMethod]
+		[DataRow(AllParts_Cron, "1/1/2022 00:00:00 -05:00", "4/3/2024 02:01 -05:00")]
+		[DataRow(AllParts_Cron, "4/3/2024 02:01 -05:00", "4/3/2027 02:01 -05:00")]
+		[TestProperty("Type", "Positive")]
+		public void AllPartsTest(string value, string targetAsString, string expectedAsString) {
 
 			var target = DateTimeOffset.Parse(targetAsString);
 			var expected = DateTimeOffset.Parse(expectedAsString);

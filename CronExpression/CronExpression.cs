@@ -18,7 +18,7 @@ namespace System {
 
 		private readonly MonthParser _Month;
 
-		//private readonly DayOfWeekParser _DayOfWeek;
+		private readonly DayOfWeekParser _DayOfWeek;
 
 		public CronExpression(string expression) {
 
@@ -32,7 +32,7 @@ namespace System {
 			this._Hour = HourParser.Parse(matches.Result("${Hours}"));
 			this._Day = DayParser.Parse(matches.Result("${Days}"));
 			this._Month = MonthParser.Parse(matches.Result("${Month}"));
-			//this._DayOfWeek = DayOfWeekParser.Parse(matches.Result("${DayOfWeek}"));
+			this._DayOfWeek = DayOfWeekParser.Parse(matches.Result("${DayOfWeek}"));
 		}
 
 		public DateTimeOffset Next(DateTimeOffset target) {
@@ -60,8 +60,10 @@ namespace System {
 		/// <returns></returns>
 		DateTimeOffset _Next(DateTimeOffset target) {
 
-			var returnValue = this._Month
+			var returnValue = this._DayOfWeek
 				.Apply(target);
+			returnValue = this._Month
+				.Apply(returnValue);
 			returnValue = this._Day
 				.Apply(returnValue);
 			returnValue = this._Hour
