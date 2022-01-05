@@ -1,27 +1,64 @@
 ﻿using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Text.RegularExpressions;
 
 namespace CronExpression.Internals {
 
 	abstract class CronInterval : ICronInterval {
 
+		readonly int _ABSOLUTE_MAX;
+
+		readonly bool _IsZeroBasedValue;
+
+		protected readonly ICronValue[] Values;
+
 		public abstract DateTimeOffset ApplyInterval(DateTimeOffset target);
 
 		public virtual bool IsWithinInterval(DateTimeOffset target)
 			=> throw new NotImplementedException();
 
-		protected abstract bool ValidateValue(int value);
+		#region Protected Method(s)
 
-		protected abstract ICronValue RangeValueFactory(int min, int max);
+		protected CronInterval(int absoluteMax, string rawPartExpression, bool isZeroBasedValue) {
 
-		protected abstract ICronValue StepFactory(int start, int step);
+			if (absoluteMax < 7)
+				throw new ArgumentOutOfRangeException(nameof(absoluteMax));
+			if (string.IsNullOrEmpty(rawPartExpression))
+				throw new ArgumentNullException(nameof(rawPartExpression));
 
-		protected abstract ICronValue SpecificIntervalFactory(int specificInterval);
+			this._ABSOLUTE_MAX = absoluteMax;
+			this._IsZeroBasedValue = isZeroBasedValue;
 
-		protected internal ICronValue _ExtractValue(string part) {
+			var values = new List<ICronValue>(16);
+			foreach (var i in this.DecomposePartExpression(rawPartExpression))
+				// WARNING: THE FOLLOWING STATEMENT DEPENDS ON MULTIPLE MEMBER
+				// FIELD VALUES AND MUST BE PROCESSED LAST
+				values.Add(this.ExtractValue(i));
+
+			this.Values = values.ToArray();
+		}
+
+		protected abstract DateTimeOffset AdjustValue(DateTimeOffset target, int value);
+
+		protected IEnumerable<string> DecomposePartExpression(string rawPartExpression) {
+
+			if (!Regex.IsMatch(rawPartExpression, @"(?<value>[-\*0-9\/]+)(?:,(?<value>[-\*0-9\/]+))*"))
+				yield return rawPartExpression;
+			else {
+				var q = from i in rawPartExpression.Split(',')
+						select i;
+				foreach (var i in q)
+					yield return i;
+			}
+		}
+
+		protected internal ICronValue ExtractValue(string part) {
 
 			if (string.IsNullOrEmpty(part))
 				throw new ArgumentNullException(nameof(part));
+
+			CronExpressionHelper.ValidateRawPartExpression(part, this._ABSOLUTE_MAX, this._IsZeroBasedValue);
 
 			ICronValue returnValue;
 
@@ -32,35 +69,236 @@ namespace CronExpression.Internals {
 			else if (rangeRegex.Success) {
 				var min = int.Parse(rangeRegex.Result("${Min}"));
 				var max = int.Parse(rangeRegex.Result("${Max}"));
-				if (!this.ValidateValue(min))
-					throw new FormatException($"'{min}' is out of range for minimum value");
-				if (!this.ValidateValue(max))
-					throw new FormatException($"'{max}' is out of range for maximum value");
 				returnValue = this.RangeValueFactory(min, max);
 			} else if (stepsRegex.Success) {
 				var start = int.Parse(stepsRegex.Result("${Start}"));
 				var step = int.Parse(stepsRegex.Result("${Step}"));
-				if (!this.ValidateValue(start))
-					throw new FormatException($"'{start}' is out of range for start value");
-				if (!this.ValidateValue(step))
-					throw new FormatException($"'{step}' is out of range for step value");
 				returnValue = this.StepFactory(start, step);
 			} else if (int.TryParse(part, out var specificValue)) {
-				if (!this.ValidateValue(specificValue))
-					throw new FormatException($"'{specificValue}' is out of range for specific interval value");
 				returnValue = this.SpecificIntervalFactory(specificValue);
 			} else
-				throw new FormatException($"'{part}' is an invalid expression");
+				throw new InvalidOperationException();
 
 			return returnValue;
+		}
+
+		protected abstract DateTimeOffset Fixed(DateTimeOffset target, int value);
+
+		protected abstract int IntervalValue(DateTimeOffset target);
+
+		protected virtual ICronValue SpecificIntervalFactory(int specificInterval)
+			=> new GenericSpecificValue(
+				specificInterval,
+				this._ABSOLUTE_MAX,
+				new ComputationDelegates(
+					this.AdjustValue,
+					this.IntervalValue,
+					this.Reduce,
+					this.Fixed
+				)
+			);
+
+		protected virtual ICronValue StepFactory(int start, int step)
+			=> new GenericStepValue(
+				start,
+				step,
+				this._ABSOLUTE_MAX,
+				new ComputationDelegates(
+					this.AdjustValue,
+					this.IntervalValue,
+					this.Reduce,
+					this.Fixed
+				)
+			);
+
+		protected virtual ICronValue RangeValueFactory(int min, int max)
+			=> new GenericRangeValue(
+				min,
+				max,
+				this._ABSOLUTE_MAX,
+				new ComputationDelegates(
+					this.AdjustValue,
+					this.IntervalValue,
+					this.Reduce,
+					this.Fixed
+				)
+			);
+
+		protected abstract DateTimeOffset Reduce(DateTimeOffset target);
+
+		protected abstract bool ValidateValue(int value);
+
+		#endregion
+
+		#region Member Class(es)
+
+		sealed class ComputationDelegates {
+
+			public ComputationDelegates(
+				Func<DateTimeOffset, int, DateTimeOffset> adjust,
+				Func<DateTimeOffset, int> intervalValue,
+				Func<DateTimeOffset, DateTimeOffset> reduce,
+				Func<DateTimeOffset, int, DateTimeOffset> @fixed) {
+				this.Adjust = adjust ?? throw new ArgumentNullException(nameof(adjust));
+				this.IntervalValue = intervalValue ?? throw new ArgumentNullException(nameof(intervalValue));
+				this.Reduce = reduce ?? throw new ArgumentNullException(nameof(reduce));
+				this.Fixed = @fixed ?? throw new ArgumentNullException(nameof(@fixed));
+			}
+
+			public Func<DateTimeOffset, int, DateTimeOffset> Adjust { get; }
+
+			public Func<DateTimeOffset, int> IntervalValue { get; }
+
+			public Func<DateTimeOffset, DateTimeOffset> Reduce { get; }
+
+			public Func<DateTimeOffset, int, DateTimeOffset> Fixed { get; }
 		}
 
 		sealed class NoOp : ICronValue {
 
 			public NoOp() { }
 
-			public DateTimeOffset Values(DateTimeOffset target)
+			DateTimeOffset ICronValue.Values(DateTimeOffset target)
 				=> target;
 		}
+
+		sealed class GenericRangeValue : ICronValue {
+
+			readonly int ABSOLUTE_MAX;
+
+			readonly ComputationDelegates _Delegates;
+
+			readonly int _RangeMinValue;
+
+			readonly int _RangeMaxValue;
+
+			public GenericRangeValue(int rangeMin, int rangeMax, int absoluteMax, ComputationDelegates delegates) {
+
+				if (absoluteMax < 7)
+					throw new ArgumentOutOfRangeException(nameof(absoluteMax));
+				if (rangeMin < 0 || rangeMin >= absoluteMax)
+					throw new ArgumentOutOfRangeException(nameof(rangeMin));
+				if (rangeMax < 0 || rangeMax >= absoluteMax)
+					throw new ArgumentOutOfRangeException(nameof(rangeMax));
+				if (rangeMin >= rangeMax)
+					throw new ArgumentOutOfRangeException(nameof(rangeMin), $"Value cannot be greater than max value of {rangeMax}");
+				this._RangeMinValue = rangeMin;
+				this._RangeMaxValue = rangeMax;
+				this.ABSOLUTE_MAX = absoluteMax;
+				this._Delegates = delegates ?? throw new ArgumentOutOfRangeException(nameof(delegates));
+			}
+
+			DateTimeOffset ICronValue.Values(DateTimeOffset target) {
+
+				DateTimeOffset returnValue;
+				var targetValue = this._Delegates.IntervalValue(target);
+				var reduced = this._Delegates.Reduce(target);
+				if (reduced > this._Delegates.Fixed(target, this._RangeMaxValue))
+					returnValue = this._Delegates.Adjust(target, (this.ABSOLUTE_MAX - targetValue) + this._RangeMinValue);
+				else if (reduced < this._Delegates.Fixed(target, this._RangeMinValue))
+					returnValue = this._Delegates.Adjust(target, this._RangeMinValue - targetValue);
+				else
+					returnValue = target; // We are within range
+				if (target < returnValue)
+					returnValue = this._Delegates.Reduce(returnValue);
+				return returnValue;
+			}
+		}
+
+		sealed class GenericSpecificValue : ICronValue {
+
+			readonly int ABSOLUTE_MAX;
+
+			readonly ComputationDelegates _Delegates;
+
+			readonly int _Value;
+
+			public GenericSpecificValue(int value, int absoluteMax, ComputationDelegates delegates) {
+				if (absoluteMax < 7)
+					throw new ArgumentOutOfRangeException(nameof(absoluteMax));
+				this._Value = value;
+				this.ABSOLUTE_MAX = absoluteMax;
+				this._Delegates = delegates ?? throw new ArgumentOutOfRangeException(nameof(delegates));
+			}
+
+			DateTimeOffset ICronValue.Values(DateTimeOffset target) {
+
+				var returnValue = target;
+
+				var targetValue = this._Delegates.IntervalValue(target);
+				if (this._Delegates.Reduce(target) > this._Delegates.Fixed(target, this._Value))
+					returnValue = this._Delegates.Adjust(returnValue, (this.ABSOLUTE_MAX - targetValue) + this._Value);
+				else
+					returnValue = this._Delegates.Adjust(returnValue, this._Value - targetValue);
+
+				if (target < returnValue)
+					returnValue = this._Delegates.Reduce(returnValue);
+
+				return returnValue;
+			}
+		}
+
+		sealed class GenericStepValue : ICronValue {
+
+			readonly int ABSOLUTE_MAX;
+
+			readonly ComputationDelegates _Delegates;
+
+			readonly int _Start;
+
+			readonly int _Step;
+
+			public GenericStepValue(int start, int step, int absoluteMax, ComputationDelegates delegates) {
+
+				if (start < 0)
+					throw new ArgumentOutOfRangeException(nameof(start));
+				if (step < 1)
+					throw new ArgumentOutOfRangeException(nameof(step));
+				if (absoluteMax < 7)
+					throw new ArgumentOutOfRangeException(nameof(absoluteMax));
+
+				this._Start = start;
+				this._Step = step;
+				this.ABSOLUTE_MAX = absoluteMax;
+				this._Delegates = delegates ?? throw new ArgumentOutOfRangeException(nameof(delegates));
+			}
+
+			DateTimeOffset ICronValue.Values(DateTimeOffset target) {
+
+				DateTimeOffset returnValue;
+				var targetValue = this._Delegates.IntervalValue(target);
+				var @fixed = this._Delegates.Fixed(target, this._Start);
+				var reduced = this._Delegates.Reduce(target);
+				if (reduced < @fixed)
+					returnValue = this._Delegates.Adjust(target, this._Start - targetValue);
+				else if (reduced == @fixed)
+					returnValue = target;
+				else {
+
+					var q = from i in this._GenerateAllSteps()
+							where i >= targetValue
+							select i;
+
+					if (!q.Any())
+						returnValue = this._Delegates.Adjust(target, (this.ABSOLUTE_MAX - targetValue) + this._Start);
+					else {
+						var interval = q.First();
+						returnValue = this._Delegates.Adjust(target, interval - targetValue);
+					}
+				}
+
+				if (target < returnValue)
+					returnValue = this._Delegates.Reduce(returnValue);
+
+				return returnValue;
+			}
+
+			IEnumerable<int> _GenerateAllSteps() {
+				for (var i = this._Start + this._Step; i < this.ABSOLUTE_MAX; i += this._Step)
+					yield return i;
+			}
+		}
+
+		#endregion
 	}
 }

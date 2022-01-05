@@ -1,62 +1,21 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text.RegularExpressions;
 
 namespace CronExpression.Internals {
 
 	sealed class DayCronInterval : CronInterval {
 
-		const int MAX_VALUE = 32;
+		internal const int MAX_VALUE = 32;
 
-		readonly ICronValue[] _Values;
-
-		public DayCronInterval(params string[] partCollection) {
-
-			if (partCollection == null)
-				throw new ArgumentNullException(nameof(partCollection));
-
-			var values = new List<ICronValue>(16);
-			foreach (var i in partCollection)
-				values.Add(this._ExtractValue(i));
-
-			this._Values = values.ToArray();
-		}
-
-		public static DayCronInterval Parse(string parts) {
-
-			Validate(parts);
-
-			var match = Regex.Match(parts, @"(?<value>[-\*0-9\/]+)(?:,(?<value>[-\*0-9\/]+))*");
-			var q = from i in parts.Split(',')
-					select i;
-
-			return new DayCronInterval(q.ToArray());
-		}
-
-		/// <summary>
-		/// TODO:  Code Dept, we need to isolate individual value validators into shared code
-		/// </summary>
-		/// <param name="parts"></param>
-		public static void Validate(string parts) {
-
-			var match = Regex.Match(parts, @"(?<value>[-\*0-9\/]+)(?:,(?<value>[-\*0-9\/]+))*");
-			if (!match.Success)
-				throw new FormatException($"'{parts}' is invalid");
-
-			var q = from i in parts.Split(',')
-					select i;
-
-			// TODO: Code Dept, we need to isolate individual value validators into shared code
-			new DayCronInterval(q.ToArray())
-				.ApplyInterval(DateTimeOffset.Now);
-		}
+		internal DayCronInterval(string rawPartExpression)
+			: base(MAX_VALUE, rawPartExpression, false) { }
 
 		public override DateTimeOffset ApplyInterval(DateTimeOffset target) {
 
 			var results = new List<DateTimeOffset>(16);
 
-			foreach (var i in this._Values)
+			foreach (var i in this.Values)
 				results.Add(i.Values(target));
 
 			var returnValue = results.Min();
@@ -67,10 +26,22 @@ namespace CronExpression.Internals {
 
 		#region Helper Method(s)
 
+		protected override int IntervalValue(DateTimeOffset target)
+			=> _Value(target);
+
+		protected override DateTimeOffset AdjustValue(DateTimeOffset target, int value)
+			=> _AdjustValue(target, value);
+
+		protected override DateTimeOffset Reduce(DateTimeOffset target)
+			=> _Reduce(target);
+
+		protected override DateTimeOffset Fixed(DateTimeOffset target, int fixedValue)
+			=> _Fixed(target, fixedValue);
+
 		static int _Value(DateTimeOffset target)
 			=> target.Day;
 
-		static DateTimeOffset _Adjust(DateTimeOffset target, int value)
+		static DateTimeOffset _AdjustValue(DateTimeOffset target, int value)
 			=> target.AddDays(value);
 
 		static DateTimeOffset _Reduce(DateTimeOffset target)
@@ -152,18 +123,18 @@ namespace CronExpression.Internals {
 				this._MaxValue = max;
 			}
 
-			public DateTimeOffset Values(DateTimeOffset target) {
+			DateTimeOffset ICronValue.Values(DateTimeOffset target) {
 
 				DateTimeOffset returnValue;
 				var reduced = _Reduce(target);
 				if (reduced > _Fixed(target, this._MaxValue))
-					returnValue = _Reduce(_Adjust(target, (_Max(target) - _Value(target)) + this._MinValue));
+					returnValue = _Reduce(_AdjustValue(target, (_Max(target) - _Value(target)) + this._MinValue));
 				else if (reduced < _Fixed(target, this._MinValue)) {
 
 					var seek = reduced;
 					while (_Max(seek) < this._MinValue)
 						seek = seek.AddMonths(1);
-					returnValue = _Reduce(_Adjust(seek, this._MinValue - _Value(seek)));
+					returnValue = _Reduce(_AdjustValue(seek, this._MinValue - _Value(seek)));
 				} else
 					returnValue = target; // We are within range
 				return returnValue;
@@ -184,7 +155,7 @@ namespace CronExpression.Internals {
 
 			public bool IsRelative { get; }
 
-			public DateTimeOffset Values(DateTimeOffset target) {
+			DateTimeOffset ICronValue.Values(DateTimeOffset target) {
 
 				var returnValue = target;
 
@@ -196,9 +167,9 @@ namespace CronExpression.Internals {
 						.AddDays(_Max(reduced) - reduced.Day + 1);
 					while (_Max(seek) < this._Value)
 						seek = seek.AddMonths(1);
-					returnValue = _Reduce(_Adjust(seek, this._Value - _Value(seek)));
+					returnValue = _Reduce(_AdjustValue(seek, this._Value - _Value(seek)));
 				} else
-					returnValue = _Adjust(returnValue, this._Value - targetValue);
+					returnValue = _AdjustValue(returnValue, this._Value - targetValue);
 
 				return returnValue;
 			}
@@ -219,14 +190,14 @@ namespace CronExpression.Internals {
 				this._Step = step;
 			}
 
-			public DateTimeOffset Values(DateTimeOffset target) {
+			DateTimeOffset ICronValue.Values(DateTimeOffset target) {
 
 				DateTimeOffset returnValue;
 				var targetValue = _Value(target);
 				var @fixed = _Fixed(target, this._Start);
 				var reduced = _Reduce(target);
 				if (reduced < @fixed)
-					returnValue = _Reduce(_Adjust(target, this._Start - targetValue));
+					returnValue = _Reduce(_AdjustValue(target, this._Start - targetValue));
 				else if (reduced == @fixed)
 					returnValue = target;
 				else {
@@ -236,10 +207,10 @@ namespace CronExpression.Internals {
 							select i;
 
 					if (!q.Any())
-						returnValue = _Reduce(_Adjust(target, (_Max(target) - targetValue) + this._Start));
+						returnValue = _Reduce(_AdjustValue(target, (_Max(target) - targetValue) + this._Start));
 					else {
 						var interval = q.First();
-						returnValue = _Reduce(_Adjust(target, interval - targetValue));
+						returnValue = _Reduce(_AdjustValue(target, interval - targetValue));
 					}
 				}
 

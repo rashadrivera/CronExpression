@@ -1,5 +1,9 @@
 ﻿namespace System {
 
+	/// <summary>
+	/// Thrown when a CRON expression potentially takes an inordinate
+	/// amount of time to process.
+	/// </summary>
 	public sealed class RunawayCronExpressionException : Exception {
 
 		public RunawayCronExpressionException(string expression)
