@@ -21,15 +21,18 @@ namespace System {
 				// We check the next minute forward
 				.AddMinutes(1);
 
-			var cycle = 0;
+			var timeout = DateTimeOffset.Now.AddSeconds(0.2);
 			do {
 				returnValue = this._Next(returnValue);
-				if (++cycle > 30)
+				if (timeout < DateTimeOffset.Now)
 					throw new RunawayCronExpressionException(this._Expression);
-			} while (!this._IsDateValid(returnValue));
+			} while (!this._IsWithinSchedule(returnValue));
 
 			return returnValue;
 		}
+
+		public bool IsWithinSchedule(DateTimeOffset target)
+			=> this._IsWithinSchedule(target);
 
 		#region Helper Method(s)
 
@@ -64,7 +67,7 @@ namespace System {
 		/// </summary>
 		/// <param name="target"></param>
 		/// <returns></returns>
-		bool _IsDateValid(DateTimeOffset target) {
+		bool _IsWithinSchedule(DateTimeOffset target) {
 			var peekNext = this._Next(target);
 			var returnValue = peekNext == target;
 			return returnValue;
