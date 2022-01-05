@@ -15,33 +15,46 @@ namespace System {
 			this._Expression = expression.Trim();
 		}
 
-		public DateTimeOffset Next(DateTimeOffset target) {
+		public DateTimeOffset Next(DateTimeOffset target)
+			=> this._Next(
+				target
+					// We check the next minute forward
+					.AddMinutes(1)
+			);
 
-			var returnValue = target
-				// We check the next minute forward
-				.AddMinutes(1);
+		public bool IsWithinSchedule(DateTimeOffset target)
+			=> this._IsWithinSchedule(target);
 
-			var timeout = DateTimeOffset.Now.AddSeconds(0.2);
+		public TimeSpan Timeout(DateTimeOffset target) {
+
+			if (IsWithinSchedule(target))
+				return TimeSpan.Zero;
+
+			var next = this._Next(target);
+			return next - target;
+		}
+
+		#region Helper Method(s)
+
+		DateTimeOffset _Next(DateTimeOffset target) {
+
+			var returnValue = target;
+			var timeout = DateTime.Now.AddSeconds(0.2);
 			do {
-				returnValue = this._Next(returnValue);
-				if (timeout < DateTimeOffset.Now)
+				returnValue = this._Project(returnValue);
+				if (timeout < DateTime.Now)
 					throw new RunawayCronExpressionException(this._Expression);
 			} while (!this._IsWithinSchedule(returnValue));
 
 			return returnValue;
 		}
 
-		public bool IsWithinSchedule(DateTimeOffset target)
-			=> this._IsWithinSchedule(target);
-
-		#region Helper Method(s)
-
 		/// <summary>
 		/// Compute the next time based on Cron schedule
 		/// </summary>
 		/// <param name="target"></param>
 		/// <returns></returns>
-		DateTimeOffset _Next(DateTimeOffset target) {
+		DateTimeOffset _Project(DateTimeOffset target) {
 
 			var parts = CronExpressionHelper.ExtractParts(this._Expression);
 
@@ -68,7 +81,7 @@ namespace System {
 		/// <param name="target"></param>
 		/// <returns></returns>
 		bool _IsWithinSchedule(DateTimeOffset target) {
-			var peekNext = this._Next(target);
+			var peekNext = this._Project(target);
 			var returnValue = peekNext == target;
 			return returnValue;
 		}

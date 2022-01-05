@@ -75,7 +75,6 @@ namespace CronExpressionTests {
 			Assert.AreEqual(expected, nextInterval);
 		}
 
-
 		[DataTestMethod]
 		[DataRow(AllParts_Cron, "4/3/2024 02:01 -05:00")]
 		[DataRow(AllParts_Cron, "4/3/2027 02:01 -05:00")]
@@ -89,6 +88,21 @@ namespace CronExpressionTests {
 			var target = DateTimeOffset.Parse(targetAsString);
 			var expression = new System.CronExpression(value);
 			Assert.IsTrue(expression.IsWithinSchedule(target));
+		}
+
+		[DataTestMethod]
+		//[DataRow(MinuteAndHour_Cron, "12/26/2021 11:01:12", "12/26/2021 11:03:00")]
+		//[DataRow(MinuteThroughMonth_Cron, "12/26/2021 11:01:12 -05:00", "2/4/2022 01:01:00 -05:00")]
+		[DataRow(AllParts_Cron, "1/1/2022 00:00:00 -05:00", "4/3/2024 02:01 -05:00")]
+		[TestProperty("Type", "Positive")]
+		public void TimoutTests(string value, string targetAsString, string nextAsString) {
+
+			var target = DateTimeOffset.Parse(targetAsString);
+			var next = DateTimeOffset.Parse(nextAsString);
+			var expression = new System.CronExpression(value);
+
+			var expected = next - target;
+			Assert.AreEqual(expected, expression.Timeout(target));
 		}
 	}
 }
