@@ -112,8 +112,8 @@ namespace CronExpressionTests {
 		#region StarStepExample
 
 		[DataTestMethod]
-		//[DataRow("1 2 * * */1", "1/5/2022 06:05:04 -05:00", "1/6/2022 02:01 -05:00")]
-		//[DataRow("0 0 * * */1", "1/7/2022 06:05:04 -05:00", "1/8/2022 00:00 -05:00")]
+		[DataRow("1 2 * * */1", "1/5/2022 06:05:04 -05:00", "1/6/2022 02:01 -05:00")]
+		[DataRow("0 0 * * */1", "1/7/2022 06:05:04 -05:00", "1/8/2022 00:00 -05:00")]
 		[DataRow("0 0 */1 * *", "1/7/2022 06:05:04 -05:00", "1/8/2022 00:00 -05:00")]
 		[TestProperty("Type", "Positive")]
 		public void StarStepExampleTests(string value, string targetAsString, string expectedAsString) {
