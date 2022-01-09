@@ -58,7 +58,7 @@ namespace CronExpression.Internals {
 				throw new ArgumentNullException(nameof(rawPartExpression));
 
 			var rangeRegex = Regex.Match(rawPartExpression, @"^(?<Min>\d+)-(?<Max>\d+)$");
-			var stepsRegex = Regex.Match(rawPartExpression, @"^(?<Start>\d+)/(?<Step>\d+)$");
+			var stepsRegex = Regex.Match(rawPartExpression, @"^(?<Start>\d+|\*)/(?<Step>\d+)$");
 			if (rawPartExpression == "*")
 				return;
 			else if (rangeRegex.Success) {
@@ -69,7 +69,12 @@ namespace CronExpression.Internals {
 				if (!_ValidateValue(max, absoluteMax, isZeroBasedValue))
 					throw new FormatException($"'{max}' is out of range for maximum value");
 			} else if (stepsRegex.Success) {
-				var start = int.Parse(stepsRegex.Result("${Start}"));
+				string startAsString = stepsRegex.Result("${Start}");
+				int start;
+				if (startAsString == "*")
+					start = isZeroBasedValue ? 0 : 1;
+				else
+					start = int.Parse(startAsString);
 				var step = int.Parse(stepsRegex.Result("${Step}"));
 				if (!_ValidateValue(start, absoluteMax, isZeroBasedValue))
 					throw new FormatException($"'{start}' is out of range for start value");

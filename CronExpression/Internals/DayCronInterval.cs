@@ -95,8 +95,8 @@ namespace CronExpression.Internals {
 		protected override ICronValue RangeValueFactory(int min, int max)
 			=> new RangeValue(min, max);
 
-		protected override ICronValue StepFactory(int start, int step)
-			=> new StepValue(start, step);
+		protected override ICronValue StepFactory(int start, int step, bool isAnyValue)
+			=> new StepValue(start, step, isAnyValue);
 
 		protected override ICronValue SpecificIntervalFactory(int specificInterval)
 			=> new SpecificValue(specificInterval);
@@ -177,15 +177,18 @@ namespace CronExpression.Internals {
 
 		sealed class StepValue : ICronValue {
 
+			readonly bool _IsAnyValue;
+
 			readonly int _Start;
 
 			readonly int _Step;
 
-			public StepValue(int start, int step) {
+			public StepValue(int start, int step, bool isAnyValue) {
 
 				if (start < 0)
 					throw new ArgumentOutOfRangeException(nameof(start));
 
+				this._IsAnyValue = isAnyValue;
 				this._Start = start;
 				this._Step = step;
 			}
@@ -194,8 +197,12 @@ namespace CronExpression.Internals {
 
 				DateTimeOffset returnValue;
 				var targetValue = _Value(target);
-				var @fixed = _Fixed(target, this._Start);
 				var reduced = _Reduce(target);
+				DateTimeOffset @fixed;
+				if (this._IsAnyValue)
+					@fixed = reduced;
+				else
+					@fixed = _Fixed(target, this._Start);
 				if (reduced < @fixed)
 					returnValue = _Reduce(_AdjustValue(target, this._Start - targetValue));
 				else if (reduced == @fixed)

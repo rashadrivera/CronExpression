@@ -63,7 +63,7 @@ namespace CronExpression.Internals {
 			ICronValue returnValue;
 
 			var rangeRegex = Regex.Match(part, @"^(?<Min>\d+)-(?<Max>\d+)$");
-			var stepsRegex = Regex.Match(part, @"^(?<Start>\d+)/(?<Step>\d+)$");
+			var stepsRegex = Regex.Match(part, @"^(?<Start>\d+|\*)/(?<Step>\d+)$");
 			if (part == "*")
 				returnValue = new NoOp();
 			else if (rangeRegex.Success) {
@@ -71,9 +71,16 @@ namespace CronExpression.Internals {
 				var max = int.Parse(rangeRegex.Result("${Max}"));
 				returnValue = this.RangeValueFactory(min, max);
 			} else if (stepsRegex.Success) {
-				var start = int.Parse(stepsRegex.Result("${Start}"));
+				string startAsString = stepsRegex.Result("${Start}");
+				var isAnyValue = false;
+				int start;
+				if (startAsString == "*") {
+					start = this._IsZeroBasedValue ? 0 : 1;
+					isAnyValue = true;
+				} else
+					start = int.Parse(startAsString);
 				var step = int.Parse(stepsRegex.Result("${Step}"));
-				returnValue = this.StepFactory(start, step);
+				returnValue = this.StepFactory(start, step, isAnyValue);
 			} else if (int.TryParse(part, out var specificValue)) {
 				returnValue = this.SpecificIntervalFactory(specificValue);
 			} else
@@ -98,11 +105,12 @@ namespace CronExpression.Internals {
 				)
 			);
 
-		protected virtual ICronValue StepFactory(int start, int step)
+		protected virtual ICronValue StepFactory(int start, int step, bool isAnyValue)
 			=> new GenericStepValue(
 				start,
 				step,
 				this._ABSOLUTE_MAX,
+				isAnyValue,
 				new ComputationDelegates(
 					this.AdjustValue,
 					this.IntervalValue,
@@ -244,11 +252,18 @@ namespace CronExpression.Internals {
 
 			readonly ComputationDelegates _Delegates;
 
+			readonly bool _IsAnyValue;
+
 			readonly int _Start;
 
 			readonly int _Step;
 
-			public GenericStepValue(int start, int step, int absoluteMax, ComputationDelegates delegates) {
+			public GenericStepValue(
+				int start,
+				int step,
+				int absoluteMax,
+				bool isAnyValue,
+				ComputationDelegates delegates) {
 
 				if (start < 0)
 					throw new ArgumentOutOfRangeException(nameof(start));
@@ -259,6 +274,7 @@ namespace CronExpression.Internals {
 
 				this._Start = start;
 				this._Step = step;
+				this._IsAnyValue = isAnyValue;
 				this.ABSOLUTE_MAX = absoluteMax;
 				this._Delegates = delegates ?? throw new ArgumentOutOfRangeException(nameof(delegates));
 			}
@@ -267,8 +283,14 @@ namespace CronExpression.Internals {
 
 				DateTimeOffset returnValue;
 				var targetValue = this._Delegates.IntervalValue(target);
-				var @fixed = this._Delegates.Fixed(target, this._Start);
 				var reduced = this._Delegates.Reduce(target);
+
+				DateTimeOffset @fixed;
+				if (this._IsAnyValue)
+					@fixed = reduced;
+				else
+					@fixed = this._Delegates.Fixed(target, this._Start);
+
 				if (reduced < @fixed)
 					returnValue = this._Delegates.Adjust(target, this._Start - targetValue);
 				else if (reduced == @fixed)

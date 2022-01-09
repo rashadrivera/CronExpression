@@ -59,6 +59,8 @@ namespace CronExpressionTests {
 
 		#endregion
 
+		#region AllParts
+
 		const string AllParts_Cron = "1 2 3 4 6,2-3";// 6 = Sat, 2 = Tue, 3 = Wed
 
 		[DataTestMethod]
@@ -91,8 +93,8 @@ namespace CronExpressionTests {
 		}
 
 		[DataTestMethod]
-		//[DataRow(MinuteAndHour_Cron, "12/26/2021 11:01:12", "12/26/2021 11:03:00")]
-		//[DataRow(MinuteThroughMonth_Cron, "12/26/2021 11:01:12 -05:00", "2/4/2022 01:01:00 -05:00")]
+		[DataRow(MinuteAndHour_Cron, "12/26/2021 11:01:12", "12/26/2021 11:03:00")]
+		[DataRow(MinuteThroughMonth_Cron, "12/26/2021 11:01:12 -05:00", "2/4/2022 01:01:00 -05:00")]
 		[DataRow(AllParts_Cron, "1/1/2022 00:00:00 -05:00", "4/3/2024 02:01 -05:00")]
 		[TestProperty("Type", "Positive")]
 		public void TimoutTests(string value, string targetAsString, string nextAsString) {
@@ -104,5 +106,26 @@ namespace CronExpressionTests {
 			var expected = next - target;
 			Assert.AreEqual(expected, expression.Timeout(target));
 		}
+
+		#endregion
+
+		#region StarStepExample
+
+		[DataTestMethod]
+		//[DataRow("1 2 * * */1", "1/5/2022 06:05:04 -05:00", "1/6/2022 02:01 -05:00")]
+		//[DataRow("0 0 * * */1", "1/7/2022 06:05:04 -05:00", "1/8/2022 00:00 -05:00")]
+		[DataRow("0 0 */1 * *", "1/7/2022 06:05:04 -05:00", "1/8/2022 00:00 -05:00")]
+		[TestProperty("Type", "Positive")]
+		public void StarStepExampleTests(string value, string targetAsString, string expectedAsString) {
+
+			var target = DateTimeOffset.Parse(targetAsString);
+			var expected = DateTimeOffset.Parse(expectedAsString);
+			var expression = new System.CronExpression(value);
+
+			var nextInterval = expression.Next(target);
+			Assert.AreEqual(expected, nextInterval);
+		}
+
+		#endregion
 	}
 }
