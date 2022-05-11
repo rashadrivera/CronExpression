@@ -1,4 +1,4 @@
-# CronExpression
+# Simplest CRON Expression Library
 .NET data type for CRON expressions.
 
 This is an open-source code example for CRON expressions in .NET. I made this project because:
@@ -9,3 +9,11 @@ This is an open-source code example for CRON expressions in .NET. I made this pr
 4. I needed a CRON library that has a small code footprint
 
 Contributors are welcomed.
+
+# Code Example
+CronExpression is simple class construct that allows you to project the next interval of any given point in time.  In addition, it provides the ability to determin the time span until the next interval.
+
+## Projecting Next Interval
+
+## Determining Timeout
+
