@@ -101,7 +101,7 @@ namespace CronExpression.Internals {
 			if (isZeroBasedValue)
 				return value >= 0 && value < absoluteMax;
 			else
-				return value > 0 && value < absoluteMax;
+				return value > 0 && value <= absoluteMax;
 		}
 
 		#endregion

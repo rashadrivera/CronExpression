@@ -37,7 +37,7 @@ namespace CronExpression.Internals {
 				.AddMilliseconds(-target.Millisecond)
 				.AddSeconds(-target.Second)
 				.AddMinutes(-target.Minute)
-				.AddMinutes(-target.Hour)
+				.AddHours(-target.Hour)
 				.AddDays(-(target.Day - 1));
 
 		protected override DateTimeOffset Fixed(DateTimeOffset target, int fixedValue)
@@ -47,6 +47,45 @@ namespace CronExpression.Internals {
 
 		protected override bool ValidateValue(int value)
 			=> !(value < 0 || value >= MAX_VALUE);
+
+		protected override ICronValue StepFactory(int start, int step, bool isAnyValue)
+			=> new MonthStepValue(
+				start,
+				step,
+				MAX_VALUE,
+				isAnyValue,
+				new ComputationDelegates(
+					this.AdjustValue,
+					this.IntervalValue,
+					this.Reduce,
+					this.Fixed
+				)
+			);
+
+		#endregion
+
+		#region Member Class(es)
+
+		sealed class MonthStepValue : GenericStepValue {
+
+			public MonthStepValue(
+				int start,
+				int step,
+				int absoluteMax,
+				bool isAnyValue,
+				ComputationDelegates delegates)
+				: base(start, step, absoluteMax, isAnyValue, delegates) { }
+
+			protected override IEnumerable<DateTimeOffset> GenerateAllSteps(DateTimeOffset target) {
+				var MAX_LIMIT = target.AddDays(365 * 2);
+				var returnValue = target.AddMonths(-target.Month)
+					.AddMonths(this.Start);
+				do {
+					yield return returnValue;
+					returnValue = returnValue.AddMonths(this.Step);
+				} while (returnValue < MAX_LIMIT);
+			}
+		}
 
 		#endregion
 	}

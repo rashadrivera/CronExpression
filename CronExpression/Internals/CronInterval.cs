@@ -5,6 +5,101 @@ using System.Text.RegularExpressions;
 
 namespace CronExpression.Internals {
 
+	abstract class GenericStepValue : ICronValue {
+
+		protected readonly int ABSOLUTE_MAX;
+
+		readonly ComputationDelegates _Delegates;
+
+		readonly bool _IsAnyValue;
+
+		protected readonly int Start;
+
+		protected readonly int Step;
+
+		public GenericStepValue(
+			int start,
+			int step,
+			int absoluteMax,
+			bool isAnyValue,
+			ComputationDelegates delegates) {
+
+			if (start < 0)
+				throw new ArgumentOutOfRangeException(nameof(start));
+			if (step < 1)
+				throw new ArgumentOutOfRangeException(nameof(step));
+			if (absoluteMax < 7)
+				throw new ArgumentOutOfRangeException(nameof(absoluteMax));
+
+			this.Start = start;
+			this.Step = step;
+			this._IsAnyValue = isAnyValue;
+			this.ABSOLUTE_MAX = absoluteMax;
+			this._Delegates = delegates ?? throw new ArgumentOutOfRangeException(nameof(delegates));
+		}
+
+		DateTimeOffset ICronValue.Values(DateTimeOffset target) {
+
+			DateTimeOffset returnValue;
+			var targetValue = this._Delegates.IntervalValue(target);
+			var reduced = this._Delegates.Reduce(target);
+
+			DateTimeOffset @fixed;
+			if (this._IsAnyValue)
+				@fixed = reduced;
+			else
+				@fixed = this._Delegates.Fixed(target, this.Start);
+
+			if (reduced < @fixed)
+				returnValue = this._Delegates.Adjust(target, this.Start - targetValue);
+			else if (reduced == @fixed)
+				returnValue = target;
+			else {
+
+				var q = from i in this.GenerateAllSteps(target)
+						where i >= target
+						select i;
+
+				//if (!q.Any())
+				//	returnValue = this._Delegates.Adjust(target, (this.ABSOLUTE_MAX - targetValue) + this.Start);
+				//else {
+				//	var interval = q.First();
+				//	returnValue = this._Delegates.Adjust(target, interval - targetValue);
+				//}
+				returnValue = q.First();
+			}
+
+			if (target < returnValue)
+				returnValue = this._Delegates.Reduce(returnValue);
+
+			return returnValue;
+		}
+
+		protected abstract IEnumerable<DateTimeOffset> GenerateAllSteps(DateTimeOffset target);
+	}
+
+	sealed class ComputationDelegates {
+
+		public ComputationDelegates(
+			Func<DateTimeOffset, int, DateTimeOffset> adjust,
+			Func<DateTimeOffset, int> intervalValue,
+			Func<DateTimeOffset, DateTimeOffset> reduce,
+			Func<DateTimeOffset, int, DateTimeOffset> @fixed) {
+			this.Adjust = adjust ?? throw new ArgumentNullException(nameof(adjust));
+			this.IntervalValue = intervalValue ?? throw new ArgumentNullException(nameof(intervalValue));
+			this.Reduce = reduce ?? throw new ArgumentNullException(nameof(reduce));
+			this.Fixed = @fixed ?? throw new ArgumentNullException(nameof(@fixed));
+		}
+
+		public Func<DateTimeOffset, int, DateTimeOffset> Adjust { get; }
+
+		public Func<DateTimeOffset, int> IntervalValue { get; }
+
+		public Func<DateTimeOffset, DateTimeOffset> Reduce { get; }
+
+		public Func<DateTimeOffset, int, DateTimeOffset> Fixed { get; }
+	}
+
 	abstract class CronInterval : ICronInterval {
 
 		readonly int _ABSOLUTE_MAX;
@@ -105,19 +200,7 @@ namespace CronExpression.Internals {
 				)
 			);
 
-		protected virtual ICronValue StepFactory(int start, int step, bool isAnyValue)
-			=> new GenericStepValue(
-				start,
-				step,
-				this._ABSOLUTE_MAX,
-				isAnyValue,
-				new ComputationDelegates(
-					this.AdjustValue,
-					this.IntervalValue,
-					this.Reduce,
-					this.Fixed
-				)
-			);
+		protected abstract ICronValue StepFactory(int start, int step, bool isAnyValue);
 
 		protected virtual ICronValue RangeValueFactory(int min, int max)
 			=> new GenericRangeValue(
@@ -139,28 +222,6 @@ namespace CronExpression.Internals {
 		#endregion
 
 		#region Member Class(es)
-
-		sealed class ComputationDelegates {
-
-			public ComputationDelegates(
-				Func<DateTimeOffset, int, DateTimeOffset> adjust,
-				Func<DateTimeOffset, int> intervalValue,
-				Func<DateTimeOffset, DateTimeOffset> reduce,
-				Func<DateTimeOffset, int, DateTimeOffset> @fixed) {
-				this.Adjust = adjust ?? throw new ArgumentNullException(nameof(adjust));
-				this.IntervalValue = intervalValue ?? throw new ArgumentNullException(nameof(intervalValue));
-				this.Reduce = reduce ?? throw new ArgumentNullException(nameof(reduce));
-				this.Fixed = @fixed ?? throw new ArgumentNullException(nameof(@fixed));
-			}
-
-			public Func<DateTimeOffset, int, DateTimeOffset> Adjust { get; }
-
-			public Func<DateTimeOffset, int> IntervalValue { get; }
-
-			public Func<DateTimeOffset, DateTimeOffset> Reduce { get; }
-
-			public Func<DateTimeOffset, int, DateTimeOffset> Fixed { get; }
-		}
 
 		sealed class NoOp : ICronValue {
 
@@ -243,81 +304,6 @@ namespace CronExpression.Internals {
 					returnValue = this._Delegates.Reduce(returnValue);
 
 				return returnValue;
-			}
-		}
-
-		sealed class GenericStepValue : ICronValue {
-
-			readonly int ABSOLUTE_MAX;
-
-			readonly ComputationDelegates _Delegates;
-
-			readonly bool _IsAnyValue;
-
-			readonly int _Start;
-
-			readonly int _Step;
-
-			public GenericStepValue(
-				int start,
-				int step,
-				int absoluteMax,
-				bool isAnyValue,
-				ComputationDelegates delegates) {
-
-				if (start < 0)
-					throw new ArgumentOutOfRangeException(nameof(start));
-				if (step < 1)
-					throw new ArgumentOutOfRangeException(nameof(step));
-				if (absoluteMax < 7)
-					throw new ArgumentOutOfRangeException(nameof(absoluteMax));
-
-				this._Start = start;
-				this._Step = step;
-				this._IsAnyValue = isAnyValue;
-				this.ABSOLUTE_MAX = absoluteMax;
-				this._Delegates = delegates ?? throw new ArgumentOutOfRangeException(nameof(delegates));
-			}
-
-			DateTimeOffset ICronValue.Values(DateTimeOffset target) {
-
-				DateTimeOffset returnValue;
-				var targetValue = this._Delegates.IntervalValue(target);
-				var reduced = this._Delegates.Reduce(target);
-
-				DateTimeOffset @fixed;
-				if (this._IsAnyValue)
-					@fixed = reduced;
-				else
-					@fixed = this._Delegates.Fixed(target, this._Start);
-
-				if (reduced < @fixed)
-					returnValue = this._Delegates.Adjust(target, this._Start - targetValue);
-				else if (reduced == @fixed)
-					returnValue = target;
-				else {
-
-					var q = from i in this._GenerateAllSteps()
-							where i >= targetValue
-							select i;
-
-					if (!q.Any())
-						returnValue = this._Delegates.Adjust(target, (this.ABSOLUTE_MAX - targetValue) + this._Start);
-					else {
-						var interval = q.First();
-						returnValue = this._Delegates.Adjust(target, interval - targetValue);
-					}
-				}
-
-				if (target < returnValue)
-					returnValue = this._Delegates.Reduce(returnValue);
-
-				return returnValue;
-			}
-
-			IEnumerable<int> _GenerateAllSteps() {
-				for (var i = this._Start + this._Step; i < this.ABSOLUTE_MAX; i += this._Step)
-					yield return i;
 			}
 		}
 

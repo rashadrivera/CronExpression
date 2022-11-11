@@ -72,6 +72,7 @@ namespace CronExpressionTests {
 		[DataRow("5,13,35/3", "12/26/2021 03:05:12", "12/26/2021 03:13")]
 		[DataRow("5,13,35/3", "12/26/2021 03:13:13", "12/26/2021 03:35")]
 		[DataRow("5,13,35/3", "12/26/2021 03:34:34", "12/26/2021 03:35")]
+
 		[DataRow("5,13,35/3", "12/26/2021 03:35:35", "12/26/2021 03:38")]
 		[TestProperty("Type", "Positive")]
 		public void ValidMinuteSplitsTest(string splits, string targetAsString, string expectedAsString) {
