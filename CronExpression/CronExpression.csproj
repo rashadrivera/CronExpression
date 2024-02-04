@@ -4,6 +4,10 @@
     <TargetFramework>net7.0</TargetFramework>
     <AssemblyName>CronExpression</AssemblyName>
     <RootNamespace>CronExpression</RootNamespace>
+    <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
+    <Title>Cron Expression</Title>
+    <Authors>Rivera, Rashad</Authors>
+    <PackageProjectUrl>https://github.com/rashadrivera/CronExpression</PackageProjectUrl>
   </PropertyGroup>
 
 </Project>
